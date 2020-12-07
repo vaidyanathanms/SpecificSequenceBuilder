@@ -5,7 +5,7 @@ num_resids	20
 num_chains	100
 top_ipfile	top_lignin.top
 seg_name	L
-grafting	1	Ara	GOG	3
+graft_seq	1	Ara	GOG	3
 tol	0.1
 nattempts	20
 op_style	single
