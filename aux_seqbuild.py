@@ -1,8 +1,9 @@
-#---------------------------------------------------------------------------
-# Supporting scripts for making a general psf/pdb file
-# 'None' is a keyword reserved - DONT USE IT for PDB/PSF filenames.
-# Import modules
+#---------------------------------------------------------------------
+# Supporting scripts for seqbuild_main.py
+# 'None' is a reserved keyword - DONT USE IT for PDB/PSF filenames
+#---------------------------------------------------------------------
 
+# Import modules
 import os
 import sys
 import numpy
@@ -13,6 +14,7 @@ import random
 import collections
 import math
 import subprocess
+#---------------------------------------------------------------------
 
 # General copy script
 def gencpy(dum_maindir,dum_destdir,fylname):
@@ -26,9 +28,10 @@ def gencpy(dum_maindir,dum_destdir,fylname):
     desfyl = dum_destdir + '/' + fylname
     shutil.copy2(srcfyl,desfyl)
 #---------------------------------------------------------------------
+
 # Set defaults
 def def_vals():
-    return 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2.0, 50, 0.1
+    return 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2.0, 50, 0.1
 #---------------------------------------------------------------------
 
 # Check all flags 
@@ -260,8 +263,8 @@ def make_polydisp_resids(inpfyle, nch):
 
 # Initiate log file
 def init_logwrite(flog,casenum,bmtype,Marr,tfile,segname,\
-              nch,att,tol,opstyle,fl_constraint,resfyle,patfyle,\
-              disflag,pdiinp):
+              nch,att,tol,opstyle,resfyle,patfyle,disflag,pdiinp):
+
     flog.write('Case number: %d\n' %(casenum))
     flog.write('Creating TCL file for %s\n' %(bmtype))
 
@@ -280,20 +283,14 @@ def init_logwrite(flog,casenum,bmtype,Marr,tfile,segname,\
     flog.write('Segment name in input (or output prefix): %s\n' \
                %(segname))
     flog.write('#attempts/Tolerance: %d\t%g\n' %(att,tol))
-    if fl_constraint != 0 :
-        flog.write('Patch/residue constraints: Yes\n')
-    else:
-        flog.write('Patch/residue constraints: No\n')
-
     flog.write('Output style: %s\n' %(opstyle))
     
-    flog.write('Analysis beginning ..\n')
+    flog.write('Beginning chain generation..\n')
 #---------------------------------------------------------------------
 
 # Check initial files
-def find_init_files(fl_constraint,fpdbflag,fnamdflag,flbdflag,makepdifile,\
-                    input_top='none',input_pdb='none',input_pres='none',\
-                    input_pp='none'):
+def find_init_files(fpdbflag,fnamdflag,makepdifile,input_top='none',\
+                    input_pdb='none'):
     # Read defaults and throw exceptions
     if not os.path.exists(input_top):
         print('Topology file not found \n', input_top)
@@ -301,17 +298,6 @@ def find_init_files(fl_constraint,fpdbflag,fnamdflag,flbdflag,makepdifile,\
     elif fnamdflag:
         if fpdbflag and not os.path.exists(input_pdb):
             print('Initial structure file not found \n', input_pdb)
-            return -1
-    elif fl_constraint == 1 and not os.path.exists(input_pres):
-        print('Patch-residue constraint file not found', input_pres)
-        return -1
-    elif fl_constraint == 2 and not os.path.exists(input_pp): 
-        print('Patch-patch constraint file not found', input_pp)
-        return -1
-    elif fl_constraint == 3:
-        if not os.path.exists(input_pres) or \
-           not os.path.exists(input_pp):
-            print('One or more constraint file(s) not found \n')
             return -1
     elif makepdifile == 1:
         if not os.path.exists('pdigen.f90') or \
@@ -1187,8 +1173,7 @@ def make_packmol(fpin,structname,nrepeats,trans_list):
 #---------------------------------------------------------------------
 
 # Make auxiliary files for NAMD/LigninBuilder/GROMACS
-def make_auxiliary_files(tcldir,pref_pdbpsf,nch,topname,flbdflag,\
-                         input_lbd):
+def make_auxiliary_files(tcldir,pref_pdbpsf,nch,topname,input_lbd):
 
 
     # bundle.tcl for generating all psf in one go
@@ -1196,15 +1181,6 @@ def make_auxiliary_files(tcldir,pref_pdbpsf,nch,topname,flbdflag,\
     fbund.write('# Combined file to generate psf files for all chains\n')
     fbund.write('# Use source step1.tcl from Tk console to run\n')
     
-    # run_ligbuild.tcl to run ligninbuilder
-    # flbd = open(tcldir + '/step2.tcl','w')
-    # flbd.write('# Run LigninBuilder using this script\n')
-    # flbd.write('# Requires psf files in the folder\n')
-    # flbd.write('# Use source run_ligbuild.tcl from Tkconsole to run\n')
-    # flbd.write('package require ligninbuilder\n')
-    # flbd.write('::ligninbuilder::makelignincoordinates . . \n')
-    # flbd.close()
-
     # combine_psf.tcl() to combine psf/pdb files and write GROMACS
     # generator if neeeded
     outname = pref_pdbpsf + '_nch_' + str(nch)
@@ -1213,8 +1189,6 @@ def make_auxiliary_files(tcldir,pref_pdbpsf,nch,topname,flbdflag,\
     fcomb = open(tcldir + '/step2.tcl','w')
     fcomb.write('# To generate combined psf/pdb file..\n')    
     fcomb.write('package require psfgen\n')
-    if flbdflag == 1:
-        fcomb.write('package require topotools\n')
     fcomb.write('%s %s %s\n' %('set','name',outname))
     fcomb.write('%s %s\n' %('topology',topinp))
     fcomb.write('resetpsf\n')
@@ -1226,16 +1200,6 @@ def make_auxiliary_files(tcldir,pref_pdbpsf,nch,topname,flbdflag,\
     fcomb.write('}\n')
     fcomb.write('writepdb $name.pdb\n')
     fcomb.write('writepsf $name.psf\n')
-
-    if flbdflag == 1:
-        gmx_out = outname + '.top'
-        fcomb.write('\n')
-        fcomb.write('# Generate GROMACS *.top file \n')
-        fcomb.write('mol new $name.psf\n')
-        fcomb.write('mol addfile $name.pdb\n')
-        fcomb.write('%s %s %s %s %s %s\n' %('topo','writegmxtop'\
-                                            ,gmx_out,'[list ',\
-                                            input_lbd,']'))
 
     fcomb.write('exit\n')
     fcomb.close()
