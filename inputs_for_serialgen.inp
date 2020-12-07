@@ -1,0 +1,18 @@
+case_num	1
+biomass_type	switchgrass
+disperse	CREATE 1.50 polydisp.inp 3000
+num_resids	20
+num_chains	100
+top_ipfile	top_lignin.top
+seg_name	L
+grafting	1	Ara	GOG	3
+tol	0.1
+nattempts	20
+op_style	single
+resid_inp	inpprob_res.dat
+patch_inp	inpprob_pat.dat
+clean_directories	Y
+initiator	TRCN
+# optional: namd_inp	mini_pyconf.conf lignin.prm
+# optional: pdb_ipfile	single_G.pdb GUAI
+# optional: gen_packmol	DEF	DEF	0.0	0.0	0.0	0.0	0.0	0.0
