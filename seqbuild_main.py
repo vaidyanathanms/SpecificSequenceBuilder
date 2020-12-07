@@ -1,10 +1,10 @@
 #------------------------------------------------------------------
-# Ver: Sept-04-2020
+# Ver: Dec-07-2020
 # Author: Vaidyanathan Sethuraman
-# To generate the initial configuration file for lignin topology
-# Use NAMD and LigninBuilder to run the script
+# Generate polydisperse initial configuration for a given sequence
+# Use NAMD to run the tcl files generated
 
-# 'None' is a keyword reserved - DONT USE IT for PDB/PSF filenames.
+# 'None' is a reserved keyword- DONT USE IT for PDB/PSF filename
 #------------------------------------------------------------------
 
 # Import modules
@@ -27,14 +27,14 @@ print('Input file name: ', sys.argv[1])
 #------------------------------------------------------------------
 
 # Set defaults
-graft_opt = []; 
+graft_opt = []; backbone_seq = []
 input_pdb = 'none'; input_namd = 'none'; input_prm = 'none'
 input_pres = 'none'; input_pp = 'none'; input_lbd = 'none'
 itertype = 'single'
 def_res = 'none'; seg_name = 'SEG'; res_initiator = 'none'
 casenum,mono_deg_poly,num_chains,fpdbflag,ftopflag,fresflag,fpatflag,\
-    fl_constraint,disperflag,makepdifile,fnamdflag,pmolflag,cleanslate,\
-    flbdflag,packtol,maxatt,conftol = def_vals()
+    disperflag,makepdifile,fnamdflag,pmolflag,cleanslate,packtol,\
+    maxatt,conftol = def_vals()
 #------------------------------------------------------------------
 
 # Read from file
@@ -71,8 +71,16 @@ with open(sys.argv[1]) as farg:
             num_chains = int(words[1])
         elif words[0] == 'seg_name':
             seg_name = words[1]
-        elif words[0] == 'grafting':
-            if len(words) < 4 or (len(words)-2)%3 != 0:
+        elif words[0] == 'backbone_seq':
+            nblocks    = int(words[1]) # number of blocks
+            nres_types = int(words[2]) # number of residue types
+            if len(words) < 5 or (len(words)-3)%2 != 0:
+                exit('Unknown number of graft options: ' + line)
+            else:
+                for wcnt in range(len(words)-3):
+                    backbone_seq.append(words[wcnt+3])
+        elif words[0] == 'graft_seq':
+            if len(words) < 5 or (len(words)-2)%3 != 0:
                 exit('Unknown number of graft options: ' + line)
             else:
                 graft_opt.append(int(words[1]))
@@ -156,21 +164,14 @@ print('Begin analysis for: %s, casenum %d' %(biomas_typ,casenum))
 #------------------------------------------------------------------
 
 # Check initial and pdb file defaults and copy files
-allinitflags = find_init_files(fl_constraint,fpdbflag,fnamdflag,flbdflag,\
-                               makepdifile,input_top,input_pdb,
-                               input_pres,input_pp,input_lbd)
+allinitflags = find_init_files(fpdbflag,fnamdflag,makepdifile,\
+                               input_top,input_pdb)
 if allinitflags == -1:
     exit()
 gencpy(srcdir,head_outdir,sys.argv[1])
 gencpy(srcdir,head_outdir,resinpfyle)
 gencpy(srcdir,head_outdir,patinpfyle)
 gencpy(srcdir,head_outdir,input_top)
-if fl_constraint == 1 or fl_constraint == 3:
-    gencpy(srcdir,head_outdir,input_pres)
-elif fl_constraint == 2 or fl_constraint == 3:
-    gencpy(srcdir,head_outdir,input_pp)
-if flbdflag == 1:
-    gencpy(srcdir,head_outdir,input_lbd)
 #------------------------------------------------------------------
 
 # Make monomer array for all chains
@@ -193,6 +194,7 @@ else:
     deg_poly_all = [mono_deg_poly]*num_chains
     pdival = 1.0
     print('Monodispersed case')
+
 print('Tot ch/res/pat/pdi',num_chains,sum(deg_poly_all),\
       sum(deg_poly_all)-num_chains,pdival)
 #------------------------------------------------------------------
@@ -200,7 +202,7 @@ print('Tot ch/res/pat/pdi',num_chains,sum(deg_poly_all),\
 # Open log file
 flog = open(head_outdir + '/' + log_fname,'w')
 init_logwrite(flog,casenum,biomas_typ,deg_poly_all,input_top,\
-              seg_name,num_chains,maxatt,conftol,itertype,fl_constraint,\
+              seg_name,num_chains,maxatt,conftol,itertype,\
               resinpfyle,patinpfyle,disperflag,pdival)
 #------------------------------------------------------------------
 
@@ -315,9 +317,7 @@ tcldir = head_outdir
 if not os.path.isdir(tcldir):
     os.mkdir(tcldir)
 fbund = make_auxiliary_files(tcldir,biomas_typ,num_chains,input_top,\
-                             flbdflag,input_lbd)
-if flbdflag == 1:
-    gencpy(srcdir,tcldir,input_lbd)
+                             input_lbd)
 #------------------------------------------------------------------
 
 # Write for each chain
