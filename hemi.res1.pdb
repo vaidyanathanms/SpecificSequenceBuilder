@@ -1,0 +1,19 @@
+CRYST1    0.000    0.000    0.000  90.00  90.00  90.00 P 1           1
+ATOM      1  C1  BXYLX   1       7.011   2.914  -6.726  1.00  0.00      HE   C
+ATOM      2  C4  BXYLX   1       9.408   1.783  -7.031  1.00  0.00      HE   C
+ATOM      3  O4  BXYLX   1      10.726   0.844  -7.248  1.00  0.00      HE   O
+ATOM      4  H1  BXYLX   1       6.241   2.113  -6.772  1.00  0.00      HE   H
+ATOM      5  C5  BXYLX   1       8.867   1.410  -5.675  1.00  0.00      HE   C
+ATOM      6  H51 BXYLX   1       8.316   0.623  -5.607  1.00  0.00      HE   H
+ATOM      7  H52 BXYLX   1       9.787   1.615  -4.844  1.00  0.00      HE   H
+ATOM      8  O5  BXYLX   1       8.033   2.630  -5.622  1.00  0.00      HE   O
+ATOM      9  C2  BXYLX   1       7.906   2.900  -8.014  1.00  0.00      HE   C
+ATOM     10  H2  BXYLX   1       8.536   3.833  -7.795  1.00  0.00      HE   H
+ATOM     11  O2  BXYLX   1       7.088   3.181  -9.174  1.00  0.00      HE   O
+ATOM     12  HO2 BXYLX   1       7.269   2.427  -9.876  1.00  0.00      HE   H
+ATOM     13  C3  BXYLX   1       8.769   1.638  -8.173  1.00  0.00      HE   C
+ATOM     14  H3  BXYLX   1       8.223   0.827  -8.328  1.00  0.00      HE   H
+ATOM     15  O3  BXYLX   1       9.747   1.845  -9.179  1.00  0.00      HE   O
+ATOM     16  HO3 BXYLX   1       9.743   2.861  -9.462  1.00  0.00      HE   H
+ATOM     17  H4  BXYLX   1       9.930   2.698  -6.979  1.00  0.00      HE   H
+END
