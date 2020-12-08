@@ -6,13 +6,14 @@ num_chains	100
 top_ipfile	top_lignin.top
 seg_name	L
 graft_seq	1	Ara	GOG	3
-tol	0.1
-nattempts	20
 op_style	single
-resid_inp	inpprob_res.dat
-patch_inp	inpprob_pat.dat
 clean_directories	Y
-initiator	TRCN
 # optional: namd_inp	mini_pyconf.conf lignin.prm
 # optional: pdb_ipfile	single_G.pdb GUAI
 # optional: gen_packmol	DEF	DEF	0.0	0.0	0.0	0.0	0.0	0.0
+# *** not needed for sequence builder **
+# tol	0.1
+# nattempts	20
+# resid_inp	inpprob_res.dat
+# patch_inp	inpprob_pat.dat
+# terminator	TRCN
