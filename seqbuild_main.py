@@ -15,7 +15,7 @@ import re
 import shutil
 import glob
 import math
-from make_genpsf import * # function definitions
+from aux_seqbuild import * # function definitions
 #------------------------------------------------------------------
 
 # Read input file
@@ -27,14 +27,13 @@ print('Input file name: ', sys.argv[1])
 #------------------------------------------------------------------
 
 # Set defaults
-graft_opt = []; backbone_seq = []
+graft_opt = []; backbone_res = []; backbone_pat = []
 input_pdb = 'none'; input_namd = 'none'; input_prm = 'none'
-input_pres = 'none'; input_pp = 'none'; input_lbd = 'none'
 itertype = 'single'
 def_res = 'none'; seg_name = 'SEG'; res_initiator = 'none'
-casenum,mono_deg_poly,num_chains,fpdbflag,ftopflag,fresflag,fpatflag,\
-    disperflag,makepdifile,fnamdflag,pmolflag,cleanslate,packtol,\
-    maxatt,conftol = def_vals()
+casenum,mono_deg_poly,num_chains,fpdbflag,ftopflag,disperflag,\
+fresflag,fpatflagmakepdifile,fnamdflag,pmolflag,cleanslate,\
+packtol = def_vals()
 #------------------------------------------------------------------
 
 # Read from file
@@ -71,14 +70,26 @@ with open(sys.argv[1]) as farg:
             num_chains = int(words[1])
         elif words[0] == 'seg_name':
             seg_name = words[1]
-        elif words[0] == 'backbone_seq':
+        elif words[0] == 'backbone_res_seq':
+            fresflag = 1
             nblocks    = int(words[1]) # number of blocks
             nres_types = int(words[2]) # number of residue types
+            if nblocks < 1 or nres_types < 1:
+                exit('Unphysical number of blocks/residue types')
             if len(words) < 5 or (len(words)-3)%2 != 0:
                 exit('Unknown number of graft options: ' + line)
             else:
                 for wcnt in range(len(words)-3):
-                    backbone_seq.append(words[wcnt+3])
+                    backbone_res.append(words[wcnt+3])
+        elif words[0] == 'backbone_pat_seq':
+            if fresflag != 1:
+                exit('Enter residue sequence before patches')
+            if (nblocks > 1 and len(words)-1 != 2*nres_types) or \
+               (nblocks == 1 and len(words)-1 != 2*nres_types-1):
+                exit('Mismatch between # of residues and patches')            
+            fpatflag = 1
+            for wcnt in range(len(words)):
+                backbone_pat.append(words[wcnt+1])
         elif words[0] == 'graft_seq':
             if len(words) < 5 or (len(words)-2)%3 != 0:
                 exit('Unknown number of graft options: ' + line)
@@ -86,10 +97,6 @@ with open(sys.argv[1]) as farg:
                 graft_opt.append(int(words[1]))
                 for wcnt in range(len(words)-2):
                     graft_opt.append(words[wcnt+2])
-        elif words[0] == 'tol':
-            conftol = float(words[1])
-        elif words[0] == 'nattempts':
-            maxatt = int(words[1])
         elif words[0] == 'op_style':
             itertype  = words[1]
             if itertype == 'multi':
@@ -103,10 +110,6 @@ with open(sys.argv[1]) as farg:
                 fpdbflag = 1
         elif words[0] == 'top_ipfile':
             input_top = words[1]; ftopflag = 1
-        elif words[0] == 'resid_inp':
-            resinpfyle = words[1]; fresflag = 1
-        elif words[0] == 'patch_inp':
-            patinpfyle = words[1]; fpatflag = 1
         elif words[0] == 'namd_inp':
             if len(words) != 3:
                 exit('Unknown number of arguments: ' + line)
@@ -127,16 +130,14 @@ with open(sys.argv[1]) as farg:
             if len(words) > 3:
                 for k in range(6):
                     trans_list.append(words[3+k])            
-        elif words[0] == 'initiator':
-            res_initiator = words[1]
         else:
             exit('Unknown keyword ' + str(words[0]))
 #----------------------------------------------------------------------
 
 # Basic flag checks
-outflag = check_all_flags(casenum,fresflag,fpatflag,disperflag,\
-                          mono_deg_poly,num_chains,fnamdflag,fpdbflag,\
-                          ftopflag)
+outflag = check_all_flags(casenum,disperflag,mono_deg_poly,\
+                          num_chains,fnamdflag,fpdbflag,ftopflag,\
+                          fresflag,fpatflag)
 if outflag == -1:
     exit()
 #------------------------------------------------------------------
@@ -169,8 +170,6 @@ allinitflags = find_init_files(fpdbflag,fnamdflag,makepdifile,\
 if allinitflags == -1:
     exit()
 gencpy(srcdir,head_outdir,sys.argv[1])
-gencpy(srcdir,head_outdir,resinpfyle)
-gencpy(srcdir,head_outdir,patinpfyle)
 gencpy(srcdir,head_outdir,input_top)
 #------------------------------------------------------------------
 
@@ -202,8 +201,7 @@ print('Tot ch/res/pat/pdi',num_chains,sum(deg_poly_all),\
 # Open log file
 flog = open(head_outdir + '/' + log_fname,'w')
 init_logwrite(flog,casenum,biomas_typ,deg_poly_all,input_top,\
-              seg_name,num_chains,maxatt,conftol,itertype,\
-              resinpfyle,patinpfyle,disperflag,pdival)
+              seg_name,num_chainsitertype,disperflag,pdival)
 #------------------------------------------------------------------
 
 # Check NAMD inputs and pdb file checks
@@ -220,20 +218,10 @@ if fpdbflag and fnamdflag: # if initial pdb file is present
     gencpy(srcdir,head_outdir,input_pdb) #copy initial pdbfile
 #------------------------------------------------------------------
 
-# residue % dictionary mode
-resperc_dict = residue_ratios(resinpfyle) 
-if not bool(resperc_dict):
-    exit('ERROR: Check input residue file \n')
 if graft_opt[0] == 1:
-    flog.write('Grafting incorporated while building the chains\n')
+    flog.write('Branching incorporated while building the chains\n')
 else:
-    flog.write('Linear chains are built\n')
-#------------------------------------------------------------------
-
-# patches %dict mode
-patchperc_dict = patch_ratios(graft_opt,resperc_dict,patinpfyle) 
-if not bool(patchperc_dict):
-    exit('ERROR: Check input patch file \n')
+    flog.write('Linear chains with no branches are built\n')
 #------------------------------------------------------------------
 
 # Open file and write headers
@@ -242,49 +230,25 @@ fresin.write(';# Contains all segments for NAMD files.\n')
 fpatchin = open(head_outdir + '/' + patch_fname,'w')
 fpatchin.write(';# Contains all patches for NAMD files.\n')
 #------------------------------------------------------------------
-            
-# Create cumulative probability distribution of segments/patches
-flog.write('Making cumulative distribution for segments..\n')
-print('Making cumulative distribution for segments..')
-cumul_resarr = cumul_probdist(resperc_dict,flog)
-flog.write(str(cumul_resarr)+'\n')
-
-flog.write('Making cumulative distribution for patches..\n')
-print('Making cumulative distribution for patches..')
-cumul_patcharr = cumul_probdist(patchperc_dict,flog)
-flog.write(str(cumul_patcharr)+'\n')
-#------------------------------------------------------------------
-    
+               
 # Set 2D default list and generate segments/patches
 res_list = [[] for i in range(num_chains)]
 patch_list = [[] for i in range(num_chains-1)]
 #------------------------------------------------------------------
 
-# Create residues and check for avg probability 
+# Create residues
 print('Generating residues..')
 flog.write('Creating residue list..\n')
-res_list = create_residues(fresin,deg_poly_all,num_chains,seg_name,\
-                           resperc_dict,cumul_resarr,conftol,maxatt,\
-                           flog,graft_opt,def_res,res_initiator)
+res_list = create_seq_residues(fresin,deg_poly_all,num_chains,\
+                               seg_name,flog,graft_opt,backbone_res)
 if res_list == -1:
     exit()
 #------------------------------------------------------------------
 
-# Create patches with constraints and check for avg probability 
-if fl_constraint == 2 or fl_constraint == 3:
-    # Read patch-patch constraints (in one go)
-    print('Reading patch-patch constraints..')
-    flog.write('Reading patch-patch constraints..\n')
-    flog.write('All constraints \n')
-    ppctr_list = read_patch_incomp(input_pp)
-    flog.writelines('\t'.join(str(jval) for jval in ival) +\
-                    '\n' for ival in ppctr_list)
-else:
-    ppctr_list = [[]]
-
+# Create patches
 print('Generating patches..')
 flog.write('Creating patches list..\n')
-patch_list = create_patches(fpatchin,deg_poly_all,num_chains,seg_name,\
+patch_list = create_seq_patches(fpatchin,deg_poly_all,num_chains,seg_name,\
                             patchperc_dict,cumul_patcharr,conftol,\
                             maxatt,flog,fl_constraint,input_pres,\
                             res_list,ppctr_list,graft_opt)
@@ -398,9 +362,6 @@ for chcnt in range(num_chains):
 fbund.write('package require ligninbuilder\n')
 fbund.write('::ligninbuilder::makelignincoordinates . . \n')
 fbund.write('exit\n')
-#Exit and close file
-#fmain.write('exit')
-#fmain.close()
 fbund.close()
 #------------------------------------------------------------------
 

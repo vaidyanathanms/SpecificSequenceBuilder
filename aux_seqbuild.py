@@ -14,6 +14,7 @@ import random
 import collections
 import math
 import subprocess
+from collections import Counter
 #---------------------------------------------------------------------
 
 # General copy script
@@ -31,12 +32,11 @@ def gencpy(dum_maindir,dum_destdir,fylname):
 
 # Set defaults
 def def_vals():
-    return 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2.0, 50, 0.1
+    return 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2.0
 #---------------------------------------------------------------------
 
 # Check all flags 
-def check_all_flags(casenum,fresflag,fpatflag,disflag,M,N,\
-                    fnamd,fpdbflag,ftopflag):
+def check_all_flags(casenum,disflag,M,N,fnamd,fpdbflag,ftopflag):
     outflag = 1
     if casenum < 0:
         print('ERR: Case number not input'); outflag = -1
@@ -44,10 +44,6 @@ def check_all_flags(casenum,fresflag,fpatflag,disflag,M,N,\
         print('ERR: No chains found in input'); outflag = -1
     elif disflag == 0 and M == 0:
         print('ERR: Monodisperse systems with no MW'); outflag = -1
-    elif fresflag == 0:
-        print('ERR: Residue input not entered'); outflag = -1
-    elif fpatflag == 0:
-        print('ERR: Patch not entered'); outflag = -1
     elif ftopflag == 0:
         print('ERROR: Topology file not found')
     elif fnamd != 0 and fpdbflag == 0:
@@ -96,87 +92,6 @@ def psfgen_postprocess(fin,writetype,iter_num,segname,fnamdflag,\
     fin.write('writepsf $outputname.psf \n')
     if writetype == 'multi':
         fin.write('writepdb ${outputname}_${count}.psf \n')
-#---------------------------------------------------------------------
-
-# Read monomer ratios from input file
-def residue_ratios(inpfyle):
-
-    frac_res = collections.OrderedDict()
-
-    # Check file existence
-    if not os.path.exists(inpfyle):
-        print('Residue input file not found \n', inpfyle)
-        return -1
-
-    # add monomer details
-    with open(inpfyle) as fyle_dict:
-        for line in fyle_dict:
-            line = line.strip()
-            (key, val) = line.split()
-            frac_res[key] = float(val)
-
-    return frac_res
-#---------------------------------------------------------------------
-
-# Define patch ratios from literature
-def patch_ratios(opt_graft,resdict,inpfyle):
-
-    frac_patch = collections.OrderedDict()
-
-    # Check file existence
-    if not os.path.exists(inpfyle):
-        print('Residue input file not found \n', inpfyle)
-        return -1
-
-    # add patch details
-    with open(inpfyle) as fyle_dict:
-        for line in fyle_dict:
-            line = line.strip()
-            (key, val) = line.split()
-            frac_patch[key] = float(val)
-
-    # check for grafts and rearrange dictionary
-    if opt_graft[0] != 1:
-        return frac_patch
-
-    elif opt_graft[0] == 1:
-        newfrac_patch = collections.OrderedDict() #create new dict
-        grcnt = 1
-        while grcnt < len(opt_graft):
-            gr_resname = opt_graft[grcnt]
-            gr_patname = opt_graft[grcnt+1]
-            resflag = 0; graft_prob = 0
-            for rescnt in range(len(resdict)):
-                if list(resdict.keys())[rescnt] == gr_resname:
-                    resflag = 1
-                    graft_prob += list(resdict.values())[rescnt]
-                    frac_patch[gr_patname] = graft_prob
-                    newfrac_patch[gr_patname] = graft_prob
-                    
-            grcnt = grcnt + 2 
-            if resflag == 0:
-                print('ERROR: Could not find ', str(gr_resname))
-                return 0
-
-        # Renormalize if grafts are present and create new dict
-        sumprob = 0
-        for patcnt in range(len(frac_patch)):
-            if list(frac_patch.keys())[patcnt] not in opt_graft:
-                sumprob += list(frac_patch.values())[patcnt]
-
-        normval = sumprob/(1-graft_prob)
-
-        for patcnt in range(len(frac_patch)):
-            if list(frac_patch.keys())[patcnt] not in opt_graft:
-                newprob = list(frac_patch.values())[patcnt]/normval
-                keyval = list(frac_patch.keys())[patcnt]
-                newfrac_patch[keyval] = newprob
-        return newfrac_patch
-
-    else:
-        print('Unknown option', graft_opt[0])
-        return 0
-
 #---------------------------------------------------------------------
 
 # Initial PDI details if polydisperse chains are to be generated
@@ -263,7 +178,7 @@ def make_polydisp_resids(inpfyle, nch):
 
 # Initiate log file
 def init_logwrite(flog,casenum,bmtype,Marr,tfile,segname,\
-              nch,att,tol,opstyle,resfyle,patfyle,disflag,pdiinp):
+              nch,opstyle,disflag,pdiinp):
 
     flog.write('Case number: %d\n' %(casenum))
     flog.write('Creating TCL file for %s\n' %(bmtype))
@@ -278,11 +193,9 @@ def init_logwrite(flog,casenum,bmtype,Marr,tfile,segname,\
 
     flog.write('PDI: %g\n' %(pdiinp))
     flog.write('Tot res/pat: %d\t%d\n' %(sum(Marr),sum(Marr)-len(Marr)))
-    flog.write('Res/patch inputs: %s\t%s\n' %(resfyle,patfyle))
     flog.write('Input Topology file file: %s\n' %(tfile))
     flog.write('Segment name in input (or output prefix): %s\n' \
                %(segname))
-    flog.write('#attempts/Tolerance: %d\t%g\n' %(att,tol))
     flog.write('Output style: %s\n' %(opstyle))
     
     flog.write('Beginning chain generation..\n')
@@ -379,9 +292,9 @@ def check_pdb_defaults(inpfyle,defa_res,seginp):
     return flag
 #---------------------------------------------------------------------
     
-# Create entire list in one go so that cumulative distribution holds true
-def create_residues(flist,nresarr,nch,segpref,inp_dict,cumulprobarr\
-                    ,tol,maxattmpt,flog,graftopt,defa_res,res_initiator):
+# Create residue sequence
+def create_seq_residues(flist,nresarr,nch,segpref,flog,graftopt,\
+                        backbone_res):
 
     # Write list to a separate file
     flist.write(';#  Entire segment list\n')
@@ -391,205 +304,38 @@ def create_residues(flist,nresarr,nch,segpref,inp_dict,cumulprobarr\
 
     sum_of_res = sum(nresarr)
     flist.write('; Total number of residues\t%d\n' %(sum_of_res))
-    flog.write('Probabilities for each attempt\n')
-    flog.write('Attempt#\t')
-    if defa_res != 'none':
-        if defa_res not in list(inp_dict.keys()):
-            print('FATAL ERR: default residue not in the input')
-            print(defa_res, list(inp_dict.keys()))
-            return -1
 
-    for wout in range(len(inp_dict)):
-        flog.write('%s (%g)\t' %(list(inp_dict.keys())[wout],\
-                                 list(inp_dict.values())[wout]))
+    out_list = [[] for i in range(nch)] # output list of residues
+    
+    # Generate list 
+    for chcnt in range(nch):
+        segname = segpref + str(chcnt+1)
+        flist.write(';# chain number:\t%d\n' %(chcnt+1))
 
-    flog.write('L2norm \n')
-
-    flag_optimal = -1; oneconfigflag = -1; normold = 999999999
-
-    for attnum in range(maxattmpt):
-
-        flog.write('%d\t' %(attnum+1))    
-        flist.write(';# Attempt number \t%d\n' %(attnum+1))
-        flist.write(' resetpsf\n')
-
-        out_list = [[] for i in range(nch)] #reset every attempt
-   
-        for chcnt in range(nch):
-            segname = segpref + str(chcnt+1)
-            flist.write(';# chain number:\t%d\n' %(chcnt+1))
+        for blockcount in range(1,nblocks):
+            flist.write(' resetpsf\n')   
             flist.write(' segment %s {\n' %(segname))
-            # first is default residue if present
-            if defa_res != 'none':
-                flist.write(' residue\t%d\t%s\n' %(1,defa_res))
-                out_list[chcnt].append(defa_res)
-                rescnt = 1
-            else:
-                rescnt = 0
 
             deg_poly_chain = nresarr[chcnt]
-            while rescnt < deg_poly_chain:
-
-                ranval = random.random() #seed is current system time by default
-                findflag = 0
-                consecresflag = 0 #default: consecutive res are NOT found
-                initres_flag = 0 #def: no initiator res present
-                endgraftflag = 0 #def: if last is graft, two prior
-                #residues are NOT graft
-                for arrcnt in range(len(cumulprobarr)):
-        
-                    #Only need to check the less than value because
-                    #the array is organized in increasing order.
-                    #Break the loop once the first point where the
-                    #condition is met.
-
-                    if ranval < cumulprobarr[arrcnt]:
-                
-                        findflag = 1   
-                        resname1 = list(inp_dict.keys())[arrcnt]
-
-                        # Conditions for not first and last residues
-                        if rescnt != 0: 
-                            resname2 = out_list[chcnt][rescnt-1]
-                            consecresflag = is_res_cons(resname1,resname2\
-                                                        ,graftopt)
-
-                            #initiator or terminator condition if present
-                            if resname1 == res_initiator:
-                                if rescnt != deg_poly_chain-1:
-                                    initres_flag = 1 #can only be at end
-                                elif rescnt == deg_poly_chain-1 and \
-                                     (resname2 in graftopt):
-                                    #if end, previous cannot be graft
-                                    #(this condition is already met by
-                                    #following if statement. Just to
-                                    #be extra safe)
-                                    initres_flag = 1 
-
-                        # Last residue and second last residue cannot
-                        # be grafts
-                        if rescnt == deg_poly_chain-2 or \
-                           rescnt == deg_poly_chain-1:
-                            if (resname1 in graftopt):
-                                endgraftflag = 1                           
-
-#----------------------old version in master branch-----------------------
-#+                        # If the last residue is a graft, the previous
-#+                        # TWO resiudes cannot be graft
-#+                        if rescnt == deg_poly_chain-1 and \
-#+                           (resname1 in graftopt):
-#+                            resname3 = out_list[chcnt][rescnt-1]
-#+                            endgraftflag = is_res_cons(resname1,\
-#+                                                       resname3,graftopt)
-#---------------------------------------------------------------------------
+            for restyp_cnt in range(nres_types):
+                resnum = 0
+                for appctr in range(int(backbone_res[resnum+1])):
+                    out_list[chcnt].append(backbone_res[resnum])
+                    resnum = resnum+2
 
 
-                        if consecresflag == 0 and initres_flag == 0 \
-                           and endgraftflag == 0:
+    # After going through all the chains, count each residue
+    count_res = Counter(out_list)
 
-                            flist.write(' residue\t%d\t%s\n' \
-                                        %(rescnt+1,resname1))
-                            out_list[chcnt].append(resname1)
-                            rescnt = rescnt + 1
-                            
-                        break
+    #check sum and write output
+    sumval = sum(count_res.values())
+    if sumval != sum_of_res:
+        print('Sum from distn,sum_of_res:',sumval,sum_of_res)
+        exit('ERROR: Sum not equal to the total # of residues')
 
-                if findflag != 1:
-                    print('Random value/Probarr:', ranval,cumulprobarr)
-                    exit('Error in finding a random residue\n')
-            
-            flist.write(' }\n')
-
-        # After going through all the chains, count occurence of each res/patch
-        outdist = []
-        for key in inp_dict:
-            outdist.append(sum([i.count(key) for i in out_list]))
-
-        #normalize
-        sumval = sum(outdist)
-        if sumval != sum_of_res:
-            print('Sum from distn,sum_of_res:',sumval,sum_of_res)
-            exit('ERROR: Sum not equal to the total # of residues')
-        normlist = [x/sumval for x in outdist]
-
-        #extract target probabilities and compare
-        targ_probs = list(inp_dict.values())
-        normval = numpy.linalg.norm(numpy.array(normlist) \
-                                    - numpy.array(targ_probs))
-    
-        # Write to log file
-        for wout in range(len(outdist)):
-            flog.write('%g\t' %(outdist[wout]/sumval))
-        flog.write('%g\n' %(normval))
-
-        if normval <= tol:
-            #write to log file
-            flog.write('Found optimal residue configuration\n')
-            print('Found optimal residue configuration..')
-            flag_optimal = 1
-            return out_list
-        elif normval < normold:
-            if oneconfigflag == -1:
-                oneconfigflag = 1
-                print('Found configuration with res_err: ',normval)
-            else:
-                print('Updating configuration with res_err: ',normval)
-            backup_list = [] #create new_backup list
-            backup_list = out_list.copy()
-            flist.write('\n')
-            normold = normval
-
-    if oneconfigflag == -1:
-        print('Could not find a residue list with constraints')
-        return -1
-
-    if flag_optimal == -1:
-        print('Did not find optimal residue configuration')
-        print('Using best residue configuration with L2norm: ',normold)
-        flog.write('Did not find optimal residue configuration\n')
-        flog.write('Using best configuration with residue L2norm: %g\n'\
-                   %(normold))
-        return backup_list
-
-#---------------------------------------------------------------------
-
-# Read and check patch constraints -- May not be effective as opposed
-# to reading at once and copying to array. Need to think about it.
-# Check special cases using files
-# THIS IS CONSTRAINT FOR RESIDUE1-PATCH-RESIDUE2 combination
-def check_constraints(inpfyle,patchname,resname1,resname2):
-    
-    bef_flag = 1; aft_flag = 1 # keep as true
-    with open(inpfyle,'r') as fctr: 
-        for line in fctr:
-            line = line.rstrip('\n')
-            all_words = re.split('\W+',line)
-            if len(all_words) != 3:
-                print('ERR: Constraint file does not have 3 entries')
-                print(len(all_words),all_words)
-                return -2 # return -2
-            if all_words[0] == patchname:
-                if all_words[1] == resname1:
-                    bef_flag = 0
-                elif all_words[2] == resname2:
-                    aft_flag = 0
-
-
-    # Return 0 if any flags are 0, else return 1
-    if bef_flag == 0 or aft_flag == 0:
-        return 0
-    else:
-        return 1
-#---------------------------------------------------------------------
-
-# check consecutive residues - cannot have graft residue in
-# consecutive positions
-def is_res_cons(resname1,resname2,graftopt):
-    sameflag = 0
-    if graftopt[0] == 1:
-        if (resname1 in graftopt) and (resname2 in graftopt):
-            sameflag = 1
-    return sameflag
+    # Write to log file
+    for wout in range(len(outdist)):
+        flog.write('%g\t' %(outdist[wout]/sumval))
 #---------------------------------------------------------------------
 
 # read all patch incompatibilities
@@ -613,22 +359,7 @@ def is_forbid_patch(patchname1,patchname2,patforbid):
     return flag
 #---------------------------------------------------------------------
 
-# Generate patch rules: patch - m, residues - n
-# Structure: RESn-PATm-RESn+1-PATm+1...
-# Rule 1: (a)patch "m" between resids n/n+1; check is_forbid_pat(m,m-1)
-# (b) check constraints for m between n/n+1
-# Rule 2: res_n = graft; (a) graft_patch m between n/(n+1); check
-# is_forbid_pat(m-1,m+1); 
-# Rule 3: if res_n+1 = graft, patch m between n/n+2; check
-# is_forbid_pat(m, m-1) => same as rule 1 (VERY IMP); check constrants
-# between n and n+2 (VERY IMP); and is_forbid_pat(m-1,m). Josh
-# suggested that GOG-BB (graft-normalpatch) is not compatible.
-# Rule 4: if last resiudue is a graft. graft_patch m between n/n-1; no
-# checks required
-# For left and right residues, reference "n" corresponds to left
-# residue. For examples in comments, S/G/H are normal resids, F/PCA
-# are branch residue. 
-def create_patches(flist,nresarr,nch,segpref,inp_dict,cumulprobarr\
+def create_seq_patches(flist,nresarr,nch,segpref,inp_dict,cumulprobarr\
                    ,tol,maxattmpt,flog,ctr_flag,pres_fyle,residlist,\
                    patforbid,graft_opt):
 
@@ -641,268 +372,44 @@ def create_patches(flist,nresarr,nch,segpref,inp_dict,cumulprobarr\
     sum_of_res = sum(nresarr)
     sum_of_pat = sum_of_res - nch
     flist.write(';# Total number of patches\t%d\n' %(sum_of_pat))
-
-    flog.write('Probabilities for each attempt\n')
-    flog.write('Attempt#\t')
     
-    for wout in range(len(inp_dict)):
-        flog.write('%s (%g)\t' %(list(inp_dict.keys())[wout],\
-                                 list(inp_dict.values())[wout]))
-    flog.write('L2norm \n')
-    flag_optimal = -1; oneconfigflag = -1; normold = 999999999
+    out_list = [[] for i in range(nch)] # output list of residues
+    
+    # Generate list 
+    for chcnt in range(nch):
+        segname = segpref + str(chcnt+1)
+        flist.write(';# chain number:\t%d\n' %(chcnt+1))
 
-    for attnum in range(maxattmpt):
+        for blockcount in range(1,nblocks):
+            flist.write(' resetpsf\n')   
+            flist.write(' segment %s {\n' %(segname))
 
-        flog.write('%d\t' %(attnum+1))    
-        flist.write(';# Attempt number \t%d\n' %(attnum+1))
-        out_list = [[] for i in range(nch)] #reset every attempt
-        chcnt = -1 # easier than assigning to 0 and finding end of
-        # next loop
-        all_patch_flag = 1 # to make sure all patches in all the
-        # chains for a given attempt is taken care of. If not move to
-        # the next attempt. DEFAULT to TRUE.
-
-        while chcnt < nch-1: #since chcnt is initialized to -1
-
-            if all_patch_flag == -1:
-                flog.write('Could not find a sequence \n')
-                break #move to next attempt
-
-            chcnt += 1
-            segname = segpref + str(chcnt+1)
-            flist.write(';# chain number:\t%d\n' %(chcnt+1))
-            flist.write(';# -- Begin patches for %s ---\n' %(segname))
-
-            patcnt = 0
-            branched = 0
-            patname_L = 'None'
             deg_poly_chain = nresarr[chcnt]
-
-            # aflag: for checking res-pat-res constraints
-            # cflag: for checking pat1-pat2 adjancency
-            # cflag2: for checking graftpat-backbonepat adjacency
-            # Need to check both the monomers a patch connects
-            # patch_n between res_n and res_n+1
-            innerpatattempt = 0
-            while patcnt <= deg_poly_chain-2: #for checking constraints
-
-                innerpatattempt += 1 #update until 100 attempts/res
-                if innerpatattempt > deg_poly_chain*100: 
-                    all_patch_flag = -1 # uncheck flag 
-                    break
-
-                resname1 = residlist[chcnt][patcnt]
-                resname2 = residlist[chcnt][patcnt+1]
-                
-                # Normal case: resname1 and resname2 are "normal" RES
-                if (resname1 not in graft_opt) and (resname2 not in\
-                   graft_opt):
-                    patchname,aflag,cflag = write_normal_patch(cumulprobarr,\
-                                                               inp_dict,\
-                                                               resname1,\
-                                                               resname2,\
-                                                               ctr_flag,\
-                                                               patcnt,\
-                                                               pres_fyle,\
-                                                               patforbid,\
-                                                               graft_opt,\
-                                                               out_list,\
-                                                               chcnt,\
-                                                               patname_L)
-
-                    if patchname == 'ERR':
-                        return -1 
-
-                    # Update list if conditions are met
-                    if aflag == 1 and cflag == 0: 
-                        out_list[chcnt].append(patchname)
-                        flist.write(' patch\t%d\t%s\t%s:%d\t%s:%d\n' \
-                                    %(patcnt+1,patchname,\
-                                      segname,patcnt+1,segname,patcnt+2))
-                        patname_L = patchname # update left "normal" patch
-                        patcnt += 1 # update counter
-
-                    elif aflag == -2: #pres_fyle format is wrong
-                        return 
-
-                    #end update aflag/cflag
-
-                    continue # continue to while loop
-                        
-                # Special Case 1: "left RES" of the patch is a graft
-                # monomer. Graft patch between left side (res_n) and
-                # right side (res_n+1). Patches are assigned to the
-                # next residue. But rule 2 written above the function
-                # defintion needs to be checked. Therefore don't
-                # update patchname_L. Next "normal" patch will be
-                # compared alongside patchname_L. Check for cflag
-                # between patch m and m-1 to make sure that certain
-                # branch-backbone patches are not allowed (for eg: GOG-BB)
-                elif resname1 in graft_opt:
-                    resindex   = graft_opt.index(resname1)
-                    patchname  = graft_opt[resindex+1]
-                    flist.write(' patch\t%d\t%s\t%s:%d\t%s:%d\n' \
-                                %(patcnt+1,patchname,\
-                                  segname,patcnt+1,segname,patcnt+2))
-                    out_list[chcnt].append(patchname)
-                    patcnt += 1
-                    continue #continue to next residue                    
+            for restyp_cnt in range(nres_types):
+                resnum = 0
+                for appctr in range(int(backbone_res[resnum+1])):
+                    out_list[chcnt].append(backbone_res[resnum])
+                    resnum = resnum+2
 
 
-                # Special Case 2: "right RES" of the patch is a graft
-                # monomer. 
-                elif resname2 in graft_opt:
-                    if patcnt > 0:
-                        resname0 = residlist[chcnt][patcnt-1]
-                    else:
-                        resname0 = 'None'
-                    # Case 2a: last RES is graft. Patch graft between
-                    # n and n+1. graft_at_n is irrelevant here,
-                    # because resname1 and resname2 cannot be
-                    # simultaneously grafts. Again dont update
-                    # patchname_L. It is irrelevant
-                    # UPDATE: This condition cannot happen for the
-                    # current system.
-                    if patcnt == deg_poly_chain-2: 
-                        resindex  = graft_opt.index(resname2)
-                        patchname = graft_opt[resindex+1]
-                        flist.write(' patch\t%d\t%s\t%s:%d\t%s:%d\n' \
-                                    %(patcnt+1,patchname,\
-                                      segname,patcnt+1,segname,patcnt+2))
-                        out_list[chcnt].append(patchname)
-                        patcnt += 1
-                        continue # continue to while loop/next chain
+    while chcnt < nch-1: #since chcnt is initialized to -1
 
-                    #Case 2b: (a) patch normal between n and n+2. But
-                    #check patch constraints with the previous
-                    #"normal" patch. (b) Also check graft-backbone
-                    #patch incompatibility like Josh suggested - for
-                    #instance BB-GOG.
-                    #Ex ref: S1-P1-G2-P2-F3-P3-G4-P4-F5-P5-G6...;
-                    #Consider G4-F5 as reference. P3 and P5 are fixed
-                    #because of grafts. patname_L will take care of
-                    #case (a) whether it has to be P2 or P3 depending
-                    #upon residue on the left
-                    # (b1) check is_forbid_pat(P4,P5) or (Pn,Pn+1)
-                    # if res(n-1) == normal 
-                      #(a)  Check is_forbid_pat(P4,P3)  
-                    # else res(n-1) == graft
-                      #(a) Check is_forbid_pat(P4,P2) 
-                      #(b2) Check is_forbid_pat(P4,P3)  or (Pn,Pn-1)
-                    else: 
-                        resname3 = residlist[chcnt][patcnt+2]
-                        # get patchname that satisfies condition (a)
-                        patchname,aflag,cflag = write_normal_patch(cumulprobarr,\
-                                                                   inp_dict,\
-                                                                   resname1,\
-                                                                   resname3,\
-                                                                   ctr_flag,\
-                                                                   patcnt,\
-                                                                   pres_fyle,\
-                                                                   patforbid,\
-                                                                   graft_opt,\
-                                                                   out_list,\
-                                                                   chcnt,\
-                                                                   patname_L)
+        chcnt += 1
+        segname = segpref + str(chcnt+1)
+        flist.write(';# chain number:\t%d\n' %(chcnt+1))
+        flist.write(';# -- Begin patches for %s ---\n' %(segname))
+        
+        patcnt = 0
+        branched = 0
+        patname_L = 'None'
+        deg_poly_chain = nresarr[chcnt]
+        
+        # After going through all the chains, count occurence of 
+        #each res/patch
+        outdist = []
+        for key in inp_dict:
+            outdist.append(sum([i.count(key) for i in out_list]))
 
-
-                        if patchname == 'ERR':
-                            return -1 
-
-                        # feed patchname from condition (a) as left
-                        # patch to condition (b1)/(b2)
-                        if aflag == 1 and cflag == 0:
-                            #check (Pn,Pn+1)
-                            resindex  = graft_opt.index(resname2)
-                            gr_patname = graft_opt[resindex+1]
-                            cflag2 = is_forbid_patch(patchname,\
-                                                     gr_patname,patforbid)
-
-                            #check (Pn,Pn-1) if n-1 is graft
-                            cflag3 = 0
-                            if resname0 in graft_opt:
-                                resindex = graft_opt.index(resname0)
-                                gr_patname = graft_opt[resindex+1]
-                                cflag3 = is_forbid_patch(patchname,\
-                                                         gr_patname,patforbid)
-
-                            if cflag2 == 0 and cflag3 == 0: 
-                                out_list[chcnt].append(patchname)
-                                flist.write(' patch\t%d\t%s\t%s:%d\t%s:%d\n' \
-                                            %(patcnt+1,patchname,\
-                                              segname,patcnt+1,\
-                                              segname,patcnt+3))
-                                patname_L = patchname # update "normal" patch
-                                patcnt += 1 # update counter
-
-
-                else: # Unknown condition
-                    print('ERROR in sequence')
-                    print('ch#/pat#/res1/res2',chcnt+1,patcnt+1,\
-                          resname1,resname2)
-                    return -1
-
-            # end while loop
-            flist.write(';# --End patch list for %d--\n' %(chcnt+1))
-
-        # end for chcnt in range(nch)
-
-        # Sum and update patch list IFF all patches are present
-        if all_patch_flag == 1:
-
-            # After going through all the chains, count occurence of 
-            #each res/patch
-            outdist = []
-            for key in inp_dict:
-                outdist.append(sum([i.count(key) for i in out_list]))
-
-            #normalize
-            sumval = sum(outdist)
-            if sumval != sum_of_pat:
-                print('Sum from distn,sum_of_pat array:'\
-                      ,sumval,sum_of_pat)
-                exit('ERROR: Sum not equal to the total # of patches')
-            normlist = [x/sumval for x in outdist]
-
-            #extract target probabilities and compare
-            targ_probs = list(inp_dict.values())
-            normval = numpy.linalg.norm(numpy.array(normlist) \
-                                        - numpy.array(targ_probs))
-
-            # Write to log file
-            for wout in range(len(outdist)):
-                flog.write('%g\t' %(outdist[wout]/sumval))
-            flog.write('%g\n' %(normval))
-
-            if normval <= tol:
-                #write to log file
-                flog.write('Found optimal patch configuration\n')
-                print('Found optimal patch configuration..')
-                flag_optimal = 1
-                return out_list
-                break
-
-            elif normval < normold:
-                if oneconfigflag == -1:
-                    oneconfigflag = 1
-                    print('Found configuration with pat_err: ',normval)
-                else:
-                    print('Updating configuration with pat_err: ',normval)
-                backup_pat_list = [] #create new_backup list
-                backup_pat_list = out_list.copy()
-                flist.write('\n')
-                normold = normval
-
-    if oneconfigflag == -1:
-        print('Could not find a patch list with constraints')
-        return -1
-    if flag_optimal == -1:
-        print('Did not find optimal patch configuration')
-        print('Using best patch configuration with L2norm: ',normold)
-        flog.write('Did not find patch optimal configuration\n')
-        flog.write('Using last patch configuration with L2norm: %g\n'\
-                   %(normold))
-        return backup_pat_list
 
 #---------------------------------------------------------------------
 
