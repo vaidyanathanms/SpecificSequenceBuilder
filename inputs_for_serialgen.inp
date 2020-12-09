@@ -5,6 +5,8 @@ num_resids	20
 num_chains	100
 top_ipfile	top_lignin.top
 seg_name	L
+backbone_res_seq	4	2	XYL	10	MAN	2
+backbone_pat_seq	AA	AB	BB	BA
 graft_seq	1	Ara	GOG	3
 op_style	single
 clean_directories	Y
