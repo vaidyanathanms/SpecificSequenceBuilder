@@ -32,7 +32,7 @@ input_pdb = 'none'; input_namd = 'none'; input_prm = 'none'
 itertype = 'single'
 def_res = 'none'; seg_name = 'SEG'; res_initiator = 'none'
 casenum,mono_deg_poly,num_chains,fpdbflag,ftopflag,disperflag,\
-fresflag,fpatflagmakepdifile,fnamdflag,pmolflag,cleanslate,\
+fresflag,fpatflag,makepdifile,fnamdflag,pmolflag,cleanslate,\
 packtol = def_vals()
 #------------------------------------------------------------------
 
@@ -71,21 +71,24 @@ with open(sys.argv[1]) as farg:
         elif words[0] == 'seg_name':
             seg_name = words[1]
         elif words[0] == 'backbone_res_seq':
-            fresflag = 1
+            fresflag = 1; npat = 0
             nblocks    = int(words[1]) # number of blocks (1,>1)
+            bl_type    = check_block_type(nblocks)
             nres_types = int(words[2]) # number of residue types
             if nblocks < 1 or nres_types < 1:
                 exit('Unphysical number of blocks/residue types')
             if len(words) < 5 or (len(words)-3)%2 != 0:
                 exit('Unknown number of graft options: ' + line)
-            else: #resname patchname #residues
+            else: #resname residues
                 for wcnt in range(len(words)-3):
                     backbone_res.append(words[wcnt+3])
+                    if (wcnt+1)%2 == 0 and int(words[wcnt+3]) > 1:
+                        npat += 1 #update if nresidues>1
         elif words[0] == 'backbone_pat_seq':
             if fresflag != 1:
                 exit('Enter residue sequence before patches')
-            if (nblocks > 1 and len(words)-1 != 2*nres_types) or \
-               (nblocks == 1 and len(words)-1 != 2*nres_types-1):
+            if (bl_type == 'single' and len(words)-1 != npat) or \
+               (bl_type == 'multi'  and len(words)-1 != npat+1):
                 exit('Mismatch between # of residues and patches')            
             fpatflag = 1
             for wcnt in range(len(words)):
@@ -231,7 +234,7 @@ patch_list = [[] for i in range(num_chains-1)]
 # Create residues and patches in one go
 print('Generating residues and patches..')
 flog.write('Creating residue and patch list..\n')
-res_list,patch_list = create_res_pat(deg_poly_all,num_chains,seg_name\
+res_list,patch_list = create_res_pat(deg_poly_all,num_chains,seg_name,\
                                      flog,graft_opt,nblocks,nres_types,\
                                      backbone_res,backbone_pat)
 if res_list == -1 or patch_list == -1:

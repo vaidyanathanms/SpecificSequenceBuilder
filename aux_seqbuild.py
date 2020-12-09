@@ -36,7 +36,8 @@ def def_vals():
 #---------------------------------------------------------------------
 
 # Check all flags 
-def check_all_flags(casenum,disflag,M,N,fnamd,fpdbflag,ftopflag):
+def check_all_flags(casenum,disflag,M,N,fnamd,fpdbflag,ftopflag,\
+                    fresflag,fpatflag):
     outflag = 1
     if casenum < 0:
         print('ERR: Case number not input'); outflag = -1
@@ -45,11 +46,39 @@ def check_all_flags(casenum,disflag,M,N,fnamd,fpdbflag,ftopflag):
     elif disflag == 0 and M == 0:
         print('ERR: Monodisperse systems with no MW'); outflag = -1
     elif ftopflag == 0:
-        print('ERROR: Topology file not found')
+        print('WARNING: Topology file not found')
+    elif fresflag == 0 or fpatflag == 0:
+        print('ERROR: residue/patch data missing');outflag = -1
     elif fnamd != 0 and fpdbflag == 0:
         print('ERROR: To run NAMD, input PDB/top files are required')
         outflag = -1
     return outflag
+#---------------------------------------------------------------------
+
+# Define block type
+def check_block_type(nblocks):
+
+    if not RepresentsInt(nblocks):
+        raise RuntimeError('ERROR: nblocks should be +ve integer')
+
+    if nblocks < 1:
+        raise RuntimeError("ERROR: nblocks should be +ve integer")       
+    elif nblocks == 1:
+        bl_type = 'single'
+        print('Single block..')
+    else:
+        bl_type = 'multi'
+        print('Multiple blocks..')
+    return bl_type
+#---------------------------------------------------------------------
+
+# Check integer
+def RepresentsInt(s):
+    try: 
+        int(s)
+        return True
+    except ValueError:
+        return False
 #---------------------------------------------------------------------
 
 # Define headers for psf files
@@ -293,7 +322,7 @@ def create_res_pat(nresarr,nch,segpref,flog,graftopt,nblocks,\
         if n_bb_mons <= 1: #ERROR
             print('ERROR: Unphysical number of backbone monomers')
             print('Average degree of polymerization may be small')
-            return -1
+            raise RuntimeError('ERROR: Check input')
         flog.write(';# # of backbone/branch residues: %d\t%d' \
                    %(n_bb_mons,br_res_ch[chcnt]))
         rescntr = 0; blockcount = 0
@@ -302,9 +331,9 @@ def create_res_pat(nresarr,nch,segpref,flog,graftopt,nblocks,\
         while rescntr < n_bb_mons: # do until total backbone residues
             while restype < nres_types: # add each residue type
                 appendctr = 0
-                nresidues = int(backbone_res[3*restype+2)])
+                nresidues = int(backbone_res[2*restype+1])
                 while appendctr < nresidues:
-                    resname = backbone_res[3*restype]
+                    resname = backbone_res[2*restype]
                     res_list[chcnt].append(resname1)
                     flog.write(' residue\t%d\t%s\n'
                                (rescntr+1,resname1))
@@ -371,6 +400,8 @@ def create_res_pat(nresarr,nch,segpref,flog,graftopt,nblocks,\
     # Write to log file
     for wout in range(len(outdist)):
         flog.write('%g\t' %(outdist[wout]/sumval))
+
+    return res_list, pat_list
 #---------------------------------------------------------------------
 
 # Write residues/patches iteration by iteration
