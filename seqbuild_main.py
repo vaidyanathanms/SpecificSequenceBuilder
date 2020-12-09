@@ -143,8 +143,6 @@ if outflag == -1:
 #------------------------------------------------------------------
 
 # Output file names (will be generated automatically)
-reslist_fname = 'reslist_' + str(casenum) + '.tcl' #all res list
-patch_fname = 'patchlist_' + str(casenum)+ '.tcl' #all patch list
 log_fname = 'log_' + str(casenum) + '.txt' #log file
 #------------------------------------------------------------------
 
@@ -224,37 +222,20 @@ if graft_opt[0] == 1:
 else:
     flog.write('Building linear chains...\n')
 #------------------------------------------------------------------
-
-# Open file and write headers
-fresin = open(head_outdir + '/' + reslist_fname,'w')
-fresin.write(';# Contains all segments for NAMD files.\n')
-fpatchin = open(head_outdir + '/' + patch_fname,'w')
-fpatchin.write(';# Contains all patches for NAMD files.\n')
-#------------------------------------------------------------------
-               
+              
 # Set 2D default list and generate segments/patches
 res_list = [[] for i in range(num_chains)]
 patch_list = [[] for i in range(num_chains-1)]
 #------------------------------------------------------------------
 
-# Create residues
-print('Generating residues..')
-flog.write('Creating residue list..\n')
-res_list = create_seq_residues(fresin,deg_poly_all,num_chains,\
-                               seg_name,flog,graft_opt,nblocks,\
-                               nres_types,backbone_res)
-if res_list == -1:
-    exit()
-#------------------------------------------------------------------
-
-# Create patches
-print('Generating patches..')
-flog.write('Creating patches list..\n')
-patch_list = create_seq_patches(fpatchin,deg_poly_all,num_chains,\
-                                seg_name,graft_opt,nblocks,nres_types\
-                                ,backbone_seq,backbone_pats)
-
-if patch_list == -1:
+# Create residues and patches in one go
+print('Generating residues and patches..')
+flog.write('Creating residue and patch list..\n')
+res_list,patch_list = create_seq_residues(deg_poly_all,num_chains,\
+                                          seg_name,flog,graft_opt,\
+                                          nblocks,nres_types,\
+                                          backbone_res,backbone_pat)
+if res_list == -1 or patch_list == -1:
     exit()
 #------------------------------------------------------------------
 
@@ -376,7 +357,5 @@ print('Completed psf generation for casenum: ', casenum)
 #------------------------------------------------------------------
 
 # Close files
-fresin.close()
-fpatchin.close()
 flog.close()
 #------------------------------------------------------------------

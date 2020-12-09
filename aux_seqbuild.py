@@ -293,20 +293,22 @@ def check_pdb_defaults(inpfyle,defa_res,seginp):
 #---------------------------------------------------------------------
     
 # Create residue sequence
-def create_seq_residues(flist,nresarr,nch,segpref,flog,graftopt,\
-                        nblocks,nres_types,backbone_res):
+def create_seq_resid_pat(nresarr,nch,segpref,flog,graftopt,nblocks,\
+                         nres_types,backbone_res,backbone_pat):
 
-    # Write list to a separate file
-    flist.write(';#  Entire segment list\n')
+    # Write list to a log file
+    flog.write(';#  Entire segment list\n')
     for i in range(nch):
-        flist.write(';#  num_resds\t%d, chain#\t%d\n' \
-                    %(nresarr[i],i+1))
+        flog.write(';#  chain_id, #_residues, #_patches: %d\t%d\t%d\n'\
+                   %(i+1,nresarr[i], nresarr[i]-1)
 
     sum_of_res = sum(nresarr)
-    flist.write('; Total number of residues\t%d\n' %(sum_of_res))
+    sum_of_pat = sum_of_res - nch
+    flog.write('; Total residues/patches: %d\t%d\n'\
+               %(sum_of_res,sum_of_pat))
 
-    out_list = [[] for i in range(nch)] # output list of residues
-    
+    res_list = [[] for i in range(nch)] # output list of residues
+    pat_list = [[] for i in range(nch)] # output list of patches
     # Subtract number of branches before adding the backbone list
     if graft_opt[0]:
         br_res_ch = [] # branch residues per chain
@@ -321,7 +323,7 @@ def create_seq_residues(flist,nresarr,nch,segpref,flog,graftopt,\
     # Generate list for backbone    
     for chcnt in range(nch):
         segname = segpref + str(chcnt+1)
-        flist.write(';# chain number:\t%d\n' %(chcnt+1))
+        flog.write(';# chain number:\t%d\n' %(chcnt+1))
         n_bb_mons = nresarr[chcnt] - br_res_ch[chcnt]
         if n_bb_mons <= 1: #ERROR
             print('ERROR: Unphysical number of backbone monomers')
