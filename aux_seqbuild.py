@@ -220,42 +220,6 @@ def find_init_files(fpdbflag,fnamdflag,makepdifile,input_top='none',\
     return 1
 #---------------------------------------------------------------------
 
-# Create cumulative probability distribution from a dictionary
-def cumul_probdist(inpdict,flog):
-
-    dummy_distarr = []
-
-    # store first value
-    val = list(inpdict.values())[0]
-    dummy_distarr.append(val)
-
-    # add rest of the values
-    for key in range(len(inpdict)-1):#iterate until n-1 elements
-        val = dummy_distarr[key] + list(inpdict.values())[key+1]
-        dummy_distarr.append(val)
-
-    # check normalization
-    if abs(dummy_distarr[len(dummy_distarr)-1]-1) > pow(10,-5):
-        print('Warning: data not normalized (', \
-              dummy_distarr[len(dummy_distarr)-1],\
-              '). Forcing normalization')
-        flog.write('%s\t%g\t%s\n' %('Warning: data not normalized (', \
-                                    dummy_distarr[len(dummy_distarr)-1],\
-                                    '). Forcing normalization'))
-        sumval = dummy_distarr[len(dummy_distarr)-1]
-        
-        # force normalization
-        for cnt in range(len(dummy_distarr)):
-            dummy_distarr[cnt] = dummy_distarr[cnt]/sumval
-            
-        print('New distribution: ', dummy_distarr)
-            
-    else:
-        print('Generated target cumulative distribution..')
-
-    return dummy_distarr
-#---------------------------------------------------------------------
-
 # Check whether the input pdb file is consistent with the inputs given
 # for generating the tcl file
 def check_pdb_defaults(inpfyle,defa_res,seginp):
@@ -293,15 +257,15 @@ def check_pdb_defaults(inpfyle,defa_res,seginp):
 #---------------------------------------------------------------------
     
 # Create residue sequence
-def create_seq_resid_pat(nresarr,nch,segpref,flog,graftopt,nblocks,\
-                         nres_types,backbone_res,backbone_pat):
+def create_res_pat(nresarr,nch,segpref,flog,graftopt,nblocks,\
+                   nres_types,backbone_res,backbone_pat):
 
     # Write list to a log file
     flog.write(';#  Entire segment list\n')
     for i in range(nch):
         flog.write(';#  chain_id, #_residues, #_patches: %d\t%d\t%d\n'\
-                   %(i+1,nresarr[i], nresarr[i]-1)
-
+                   %(i+1,nresarr[i], nresarr[i]-1))
+            
     sum_of_res = sum(nresarr)
     sum_of_pat = sum_of_res - nch
     flog.write('; Total residues/patches: %d\t%d\n'\
@@ -309,6 +273,7 @@ def create_seq_resid_pat(nresarr,nch,segpref,flog,graftopt,nblocks,\
 
     res_list = [[] for i in range(nch)] # output list of residues
     pat_list = [[] for i in range(nch)] # output list of patches
+                   
     # Subtract number of branches before adding the backbone list
     if graft_opt[0]:
         br_res_ch = [] # branch residues per chain
@@ -319,7 +284,7 @@ def create_seq_resid_pat(nresarr,nch,segpref,flog,graftopt,nblocks,\
                 # for every branch, add one backbone mon
                 br_cnt += int(deg_poly_chain/(rep_freq+1))
             br_res_ch.append(br_cnt)
-            
+    
     # Generate list for backbone    
     for chcnt in range(nch):
         segname = segpref + str(chcnt+1)
@@ -329,37 +294,70 @@ def create_seq_resid_pat(nresarr,nch,segpref,flog,graftopt,nblocks,\
             print('ERROR: Unphysical number of backbone monomers')
             print('Average degree of polymerization may be small')
             return -1
-        flist.write('; backbone/branch: %d  %d' \
-                    %(n_bb_mons,br_res_ch[chcnt]))
-        flist.write(' resetpsf\n')   
-        flist.write(' segment %s {\n' %(segname))
-        rescntr = 0; blockcount = 0; restyp_cnt = 0
-        while rescntr < n_bb_mons:
-            while restype < nres_types:
+        flog.write(';# # of backbone/branch residues: %d\t%d' \
+                   %(n_bb_mons,br_res_ch[chcnt]))
+        rescntr = 0; blockcount = 0
+        restyp_cnt = 0; pattype_cnt = 0
+
+        while rescntr < n_bb_mons: # do until total backbone residues
+            while restype < nres_types: # add each residue type
                 appendctr = 0
-                while appendctr < int(backbone_res[3*restype+2)]):
-                    resname1 = backbone_res[3*restype]
-                    out_list[chcnt].append(resname1)
-                    flist.write(' residue\t%d\t%s\n' \
-                                %(rescntr+1,resname1))
-                    rescntr += 1; appendctr += 1
+                nresidues = int(backbone_res[3*restype+2)])
+                while appendctr < nresidues:
+                    resname = backbone_res[3*restype]
+                    res_list[chcnt].append(resname1)
+                    flog.write(' residue\t%d\t%s\n'
+                               (rescntr+1,resname1))
+                    rescntr += 1; appendctr += 1                       
                     if rescntr >= n_bb_mons: #exit
-                        restype = nres_types+1
-                        appctr  = backbone_res[restype+1]+1
+                        restype    = nres_types+1
+                        appendctr  = nresidues+1 
+                    # Now add patch
+                    if rescntr > 1 and appendctr < nresidues-1:
+                        patname = backbone_pat[pattype_cnt]
+                        patype_cnt += 1
+                        pat_list[chcnt].append(patname)
+                        flog.write('patch  %s  %s:%d  %s:%d\n' \
+                                   %(patname,segname,rescntr,\
+                                     segname,rescntr+1))
+                #patch between different residue types
+                if restype < nres_types-1:
+                    patname = backbone_pat[pattype_cnt+1]
+                    pat_list[chcnt].append(patname)
+                    flog.write('patch  %s  %s:%d  %s:%d\n' \
+                               %(patchname,segname,rescntr+1,\
+                                 segname,rescntr+2))
+                    pattype_cnt += 1
                 restype += 1 # end appctr loop; jump to next res
             if nblocks > 1: #end restype loop; reloop
+                #patch between different blocks if the blocks do not
+                #terminate 
+                if restype == nres_types-1:
+                    patname = backbone_pat[pattype_cnt+1]
+                    pat_list[chcnt].append(patname)
+                    flog.write('patch  %s  %s:%d  %s:%d\n' \
+                               %(patchname,segname,rescntr+1,\
+                                 segname,rescntr+2))
+                    pattype_cnt += 1
                 restype = 0
-        # Generate list for branches (little expensive to re-do it
-        # here; but will make the output cleaner)
+        # Add branches here
         if graft_opt[0]:
             for ival in range(3,len(graft_opt),3):
                 rep_freq = int(graft_opt[ival])
                 num_br   = int(nresarr[chcnt]/rep_freq)
-                resname1 = graft_opt[ival+1]
-                out_list[chcnt].append(resname1)
-                flist.write(' residue\t%d\t%s\n' \
-                            %(rescntr+1,resname1))
-                rescntr += 1
+                resname  = graft_opt[ival+1]
+                patname  = graft_opt[ival+2]
+                for jval in range(1,num_br):
+                    bbpos = jval*rep_freq
+                    res_list[chcnt].append(resname)
+                    pat_list[chcnt].append(patname)
+                    flog.write(' residue\t%d\t%s\n'
+                               (rescntr+1,resname1))
+                    flog.write('patch  %s  %s:%d  %s:%d\n' \
+                               %(patname,segname,bbpos,\
+                                 segname,rescntr+1))
+                    rescntr += 1
+
 
     # After going through all the chains, count each residue
     count_res = Counter(out_list)
@@ -373,190 +371,6 @@ def create_seq_resid_pat(nresarr,nch,segpref,flog,graftopt,nblocks,\
     # Write to log file
     for wout in range(len(outdist)):
         flog.write('%g\t' %(outdist[wout]/sumval))
-#---------------------------------------------------------------------
-
-# create patch sequence
-def create_seq_patches(flist,nresarr,nch,segpref,flog,graft_opt,\
-                       nblocks,nres_types,backbone_seq,backbone_pats):
-
-    # Write list to a separate file
-    flist.write(';# Entire patch list\n')
-    for i in range(nch):
-        flist.write(';#  num_patches\t%d, chain#\t%d\n' \
-                    %(nresarr[i]-1,i+1))
-
-    sum_of_res = sum(nresarr)
-    sum_of_pat = sum_of_res - nch
-       
-    flist.write(';# Total number of patches\t%d\n' %(sum_of_pat))
-    flist.write(';# -- Begin patches for %s ---\n' %(segname))
-    
-    out_list = [[] for i in range(nch)] # output list of patches
-
-    # Generate list for backbone
-    for chcnt in range(nch):
-        segname = segpref + str(chcnt+1)
-        flist.write(';# chain number:\t%d\n' %(chcnt+1))
-        deg_poly_chain = nresarr[chcnt]
-
-        for blockcount in range(nblocks):
-            pattyp_cnt = 0; resnum = 0
-            while pattyp_cnt < 2*nres_types-1:
-                #append backbone_res[resnum+1]-1 times for restype_i
-                for appctr in range(int(backbone_res[resnum+1])-1):
-                    out_list[chcnt].append(backbone_pat[pattyp_cnt])
-                #append restype_i-restype_i+1 patch, if nrestypes>1
-                pattyp_cnt += 1
-                if nres_types > 1:
-                    out_list[chcnt].append(backbone_pat[pattyp_cnt])
-                    pattyp_cnt += 1
-            if nblocks > 1:
-                out_list[chcnt].append(backbone_pat[pattyp_cnt])
-
-    # Generate list for branches if grafted
-    for chcnt in range(nch):
-        
-
-    # After going through all the chains, count each patch
-    count_res = Counter(out_list)
-
-    #check sum and write output
-    sumval = sum(count_res.values())
-    if sumval != sum_of_pat:
-        print('Sum from distn,sum_of_res:',sumval,sum_of_pat)
-        exit('ERROR: Sum not equal to the total # of patches')
-
-    # Write to log file
-    for wout in range(len(outdist)):
-        flog.write('%g\t' %(outdist[wout]/sumval))
-        
-#---------------------------------------------------------------------
-
-# Find patch for Case 1: when RES1 and RES2 are normal residues.
-def write_normal_patch(cumulprobarr,pat_dict,resname1,resname2,\
-                       ctr_flag,patincnt,presctrfyle,ppctrlist,\
-                       graft_opt,curpat_list,chcnt,patchname_L):
-
-    ranval = random.random() #seed is current system time by default    
-    findflag = 0
-    arrcnt = 0
-
-    while arrcnt <= len(cumulprobarr):
-        
-        #Only need to check the less than value because
-        #the array is organized in increasing order.
-        #Break the loop once the first point where the
-        #condition is met.
-        if ranval < cumulprobarr[arrcnt]:
-
-            patchname = list(pat_dict.keys())[arrcnt]
-            if patchname in graft_opt: 
-                ranval = random.random() #generate new random number
-                arrcnt = 0 #reset while loop
-                continue # iterate until normal patch
-
-            findflag = 1
-            
-            # Add constraint flags: default to TRUE
-            #so that if constraints are not there, it will
-            #be appended. consec flag has to be 0 for true
-            appendflag = 1; consecpatflag = 0 
-            if ctr_flag != 0:
-                if patincnt == 0:
-                    resname_L = 'None'
-                else:
-                    resname_L = resname1
-                        
-                # end if patcnt == 0
-                resname_R = resname2
-                if ctr_flag == 1 or ctr_flag == 3:
-                    appendflag = check_constraints(presctrfyle,patchname,\
-                                                   resname_L,resname_R)
-                elif ctr_flag == 2 or ctr_flag == 3:
-                    consecpatflag =is_forbid_patch(patchname_L,\
-                                                   patchname,ppctrlist)
-                # patchname cannot follow patchname_L
-
-                # end if ctr_flag==1
-
-            break
-
-        else: # if ranval > cumulprobarr[arrcnt]
-            
-            arrcnt += 1 # update array counter
-                
-        # end ranval < cumulprobarr[]
-
-    # end while arrcnt in range(len(cumulprobarr))
-
-    if findflag != 1:
-        print('Random value/Probarr:', ranval,cumulprobarr)
-        print('Error: Did not find a random residue\n')
-        patchname = 'ERR'
-    # end if find flag
-    
-    return patchname,appendflag,consecpatflag
-#---------------------------------------------------------------------
-
-# Write residues/patches in one go -- OBSOLETE. 
-# Added in write_multi_segments
-def write_segments_onego(fin,nresarr,nch,chnum,segname,res_list,\
-                         patch_list,graft_opt):
-
-    fin.write(';# ------Begin main code -----\n')
-    fin.write(';# Writing % segments' %(sum(nresarr)))
-    fin.write(';# Writing output for %d' %(chnum))
-    fin.write(' resetpsf \n')
-    fin.write(' segment %s {\n' %(segname))
-    
-    #Residues
-    for rescnt in range(nresarr):
-        fin.write('  residue  %d  %s\n' \
-                  %(rescnt+1,res_list[chnum-1][rescnt]))
-
-    fin.write('}')        
-    fin.write('\n')
-
-    #Patches
-    for patcnt in range(max(nresarr)-2):
-            
-        resname1 = res_list[chnum-1][patcnt]
-        resname2 = res_list[chnum-1][patcnt+1]
-        patchname = patch_list[chnum-1][patcnt]
-
-        # Normal Case: (see create_patches)
-        if resname1 not in graft_opt and resname2 not in graft_opt:
-            fin.write('patch  %s  %s:%d  %s:%d\n' \
-                      %(patchname,segname,patcnt+1,segname,patcnt+2))
-
-
-        # Special Case 1: (see create_patches)
-        elif resname1 in graft_opt:
-            fin.write('patch  %s  %s:%d  %s:%d\n' \
-                          %(patchname,segname,patcnt+1,segname,patcnt+2))
-
-        # Special Case 2: (see create_patches)
-        elif resname2 in graft_opt:
-
-            # Case 2a: last RES is graft. Patch graft between
-            # n and n+1
-            if patcnt == max(nresarr)-2: 
-                fin.write('patch  %s  %s:%d  %s:%d\n' \
-                          %(patchname,segname,patcnt+1,segname,patcnt+2))
-
-            #Case 2b: patch normal between n and n+2
-            else: 
-                fin.write('patch  %s  %s:%d  %s:%d\n' \
-                          %(patchname,segname,patcnt+1,segname,patcnt+3))
-                    
-        else: # Error
-            print('Unknow res/patch sequence')
-            print('ch#/patch#' , chnum, patcnt)
-            print(res_list)
-            print(patch_list)
-
- 
-    fin.write('\n')
 #---------------------------------------------------------------------
 
 # Write residues/patches iteration by iteration

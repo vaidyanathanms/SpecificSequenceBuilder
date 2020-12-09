@@ -231,131 +231,130 @@ patch_list = [[] for i in range(num_chains-1)]
 # Create residues and patches in one go
 print('Generating residues and patches..')
 flog.write('Creating residue and patch list..\n')
-res_list,patch_list = create_seq_residues(deg_poly_all,num_chains,\
-                                          seg_name,flog,graft_opt,\
-                                          nblocks,nres_types,\
-                                          backbone_res,backbone_pat)
+res_list,patch_list = create_res_pat(deg_poly_all,num_chains,seg_name\
+                                     flog,graft_opt,nblocks,nres_types,\
+                                     backbone_res,backbone_pat)
 if res_list == -1 or patch_list == -1:
     exit()
 #------------------------------------------------------------------
 
-# Write to file: Headers
-flog.write('Writing data to files \n')
-flog.write('Output style %s\n' %(itertype))
-print('Writing data to files..')
-print('Output style: ', itertype)
-#------------------------------------------------------------------
+# # Write to file: Headers
+# flog.write('Writing data to files \n')
+# flog.write('Output style %s\n' %(itertype))
+# print('Writing data to files..')
+# print('Output style: ', itertype)
+# #------------------------------------------------------------------
 
-#PACKMOL directives
-if pmolflag: 
-    flog.write('Initiating packmol files for %d\n..' %(casenum))
-    print('Initiating packmol files for ', casenum)
-    if input_packmol == 'DEF':
-        packname = 'packmol_'+biomas_typ+'_case_'+str(casenum)+'.inp'
-    else:
-        packname = input_packmol
-    fpack = open(head_outdir + '/' + packname,'w')        
-    initiate_packmol(fpack,biomas_typ,num_chains,packtol)
-#------------------------------------------------------------------
+# #PACKMOL directives
+# if pmolflag: 
+#     flog.write('Initiating packmol files for %d\n..' %(casenum))
+#     print('Initiating packmol files for ', casenum)
+#     if input_packmol == 'DEF':
+#         packname = 'packmol_'+biomas_typ+'_case_'+str(casenum)+'.inp'
+#     else:
+#         packname = input_packmol
+#     fpack = open(head_outdir + '/' + packname,'w')        
+#     initiate_packmol(fpack,biomas_typ,num_chains,packtol)
+# #------------------------------------------------------------------
 
-# Make tcl output directory and auxiliary files
-tcldir = head_outdir
-if not os.path.isdir(tcldir):
-    os.mkdir(tcldir)
-fbund = make_auxiliary_files(tcldir,biomas_typ,num_chains,input_top,\
-                             input_lbd)
-#------------------------------------------------------------------
+# # Make tcl output directory and auxiliary files
+# tcldir = head_outdir
+# if not os.path.isdir(tcldir):
+#     os.mkdir(tcldir)
+# fbund = make_auxiliary_files(tcldir,biomas_typ,num_chains,input_top,\
+#                              input_lbd)
+# #------------------------------------------------------------------
 
-# Write for each chain
-for chcnt in range(num_chains):
-    chnum = chcnt + 1
-    flog.write('****Writing chain number: %d***\n' %(chnum))
-    print('Writing chain number: ', chnum)
+# # Write for each chain
+# for chcnt in range(num_chains):
+#     chnum = chcnt + 1
+#     flog.write('****Writing chain number: %d***\n' %(chnum))
+#     print('Writing chain number: ', chnum)
 
-    #prefix for pdb/psf/tcl files
-    pdbpsf_name = biomas_typ + '_chnum_' + str(chnum) 
-    tcl_fname  =  pdbpsf_name +'.tcl' 
-    #fmain = open(tcldir + '/' + tcl_fname,'w')
-    #fbund.write('%s\t%s\n' %('source', tcl_fname))
+#     #prefix for pdb/psf/tcl files
+#     pdbpsf_name = biomas_typ + '_chnum_' + str(chnum) 
+#     tcl_fname  =  pdbpsf_name +'.tcl' 
+#     #fmain = open(tcldir + '/' + tcl_fname,'w')
+#     #fbund.write('%s\t%s\n' %('source', tcl_fname))
 
-    # Copy NAMD files
-    if fnamdflag:
-        gencpy(srcdir,tcldir,input_prm) 
-        fr = open(input_namd,'r')
-        fw = open('mini.conf','w')
-        fid = fr.read().replace("py_inpname",pdbpsf_name)
-        fw.write(fid)
-        fr.close(); fw.close()
-        gencpy(srcdir,tcldir,'mini.conf')
+#     # Copy NAMD files
+#     if fnamdflag:
+#         gencpy(srcdir,tcldir,input_prm) 
+#         fr = open(input_namd,'r')
+#         fw = open('mini.conf','w')
+#         fid = fr.read().replace("py_inpname",pdbpsf_name)
+#         fw.write(fid)
+#         fr.close(); fw.close()
+#         gencpy(srcdir,tcldir,'mini.conf')
 
-    deg_poly_this_chain = deg_poly_all[chcnt]
-    psfgen_headers(fbund,input_top,pdbpsf_name)
-    if itertype == 'single':
-        fbund.write('%s\t %s\n' %('set outputname', pdbpsf_name))
+#     deg_poly_this_chain = deg_poly_all[chcnt]
+#     psfgen_headers(fbund,input_top,pdbpsf_name)
+#     if itertype == 'single':
+#         fbund.write('%s\t %s\n' %('set outputname', pdbpsf_name))
         
-        flog.write('Writing config for  %d chains\n' %(num_chains))
-        write_multi_segments(fbund,-1,deg_poly_this_chain,num_chains,chnum,\
-                             seg_name,res_list,patch_list,graft_opt,\
-                             deg_poly_this_chain)
-        psfgen_postprocess(fbund,itertype,0,seg_name,fnamdflag,input_pdb)
+#         flog.write('Writing config for  %d chains\n' %(num_chains))
+#         write_multi_segments(fbund,-1,deg_poly_this_chain,num_chains,chnum,\
+#                              seg_name,res_list,patch_list,graft_opt,\
+#                              deg_poly_this_chain)
+#         psfgen_postprocess(fbund,itertype,0,seg_name,fnamdflag,input_pdb)
 
-    elif itertype == 'multi':
-        flog.write('Iteration increment counter %d\n' %(iterinc))
-        # Write segments according to iteration number
-        iter_num = 1
-        nmonsthisiter = iterinc
+#     elif itertype == 'multi':
+#         flog.write('Iteration increment counter %d\n' %(iterinc))
+#         # Write segments according to iteration number
+#         iter_num = 1
+#         nmonsthisiter = iterinc
     
-        while nmonsthisiter <= deg_poly_this_chain:
-            fbund.write('%s\t %s\n' %('set outputname', pdbpsf_name))
-            flog.write('Writing config for n-segments: %d\n' %(nmonsthisiter))
-            write_multi_segments(fbund,iter_num,nmonsthisiter,num_chains,\
-                                 chnum,seg_name,res_list,patch_list,\
-                                 graft_opt,deg_poly_this_chain)
-            psfgen_postprocess(fbund,itertype,iter_num,seg_name,\
-                               fnamdflag,input_pdb)
-            if fnamdflag == 1:
-                out_namd = 'mini' + str(iter_num) + '.out'
-                run_namd(fmain,'namd2','mini.conf',out_namd)
-            iter_num  += 1
-            nmonsthisiter = nmonsthisiter + iterinc
+#         while nmonsthisiter <= deg_poly_this_chain:
+#             fbund.write('%s\t %s\n' %('set outputname', pdbpsf_name))
+#             flog.write('Writing config for n-segments: %d\n' %(nmonsthisiter))
+#             write_multi_segments(fbund,iter_num,nmonsthisiter,num_chains,\
+#                                  chnum,seg_name,res_list,patch_list,\
+#                                  graft_opt,deg_poly_this_chain)
+#             psfgen_postprocess(fbund,itertype,iter_num,seg_name,\
+#                                fnamdflag,input_pdb)
+#             if fnamdflag == 1:
+#                 out_namd = 'mini' + str(iter_num) + '.out'
+#                 run_namd(fmain,'namd2','mini.conf',out_namd)
+#             iter_num  += 1
+#             nmonsthisiter = nmonsthisiter + iterinc
 
-        # Write the rest in one go
-        if deg_poly_this_chain%iterinc != 0:
-            fbund.write('%s\t %s\n' %('set outputname', pdbpsf_name))
-            flog.write('Writing config for n-segments: %d\n' \
-                       %(deg_poly_this_chain))
-            iter_num += 1
-            write_multi_segments(fbund,iter_num,deg_poly_this_chain,\
-                                 num_chains,chnum,seg_name,res_list,\
-                                 patch_list,graft_opt,deg_poly_this_chain)
-            psfgen_postprocess(fbund,itertype,iter_num,seg_name,\
-                               fnamdflag,input_pdb)
+#         # Write the rest in one go
+#         if deg_poly_this_chain%iterinc != 0:
+#             fbund.write('%s\t %s\n' %('set outputname', pdbpsf_name))
+#             flog.write('Writing config for n-segments: %d\n' \
+#                        %(deg_poly_this_chain))
+#             iter_num += 1
+#             write_multi_segments(fbund,iter_num,deg_poly_this_chain,\
+#                                  num_chains,chnum,seg_name,res_list,\
+#                                  patch_list,graft_opt,deg_poly_this_chain)
+#             psfgen_postprocess(fbund,itertype,iter_num,seg_name,\
+#                                fnamdflag,input_pdb)
 
-            if fnamdflag == 1:
-                out_namd = 'mini' + str(iter_num) + '.out'
-                run_namd(fmain,'namd2','mini.conf',out_namd)
+#             if fnamdflag == 1:
+#                 out_namd = 'mini' + str(iter_num) + '.out'
+#                 run_namd(fmain,'namd2','mini.conf',out_namd)
 
-    else:
-        exit('ERROR: Unknown output write style option: ' + itertype)
+#     else:
+#         exit('ERROR: Unknown output write style option: ' + itertype)
   
-    if pmolflag:
-        make_packmol(fpack,pdbpsf_name,1,trans_list)
-#------------------------------------------------------------------
-fbund.write('package require ligninbuilder\n')
-fbund.write('::ligninbuilder::makelignincoordinates . . \n')
-fbund.write('exit\n')
-fbund.close()
-#------------------------------------------------------------------
+#     if pmolflag:
+#         make_packmol(fpack,pdbpsf_name,1,trans_list)
+# #------------------------------------------------------------------
+# fbund.write('package require ligninbuilder\n')
+# fbund.write('::ligninbuilder::makelignincoordinates . . \n')
+# fbund.write('exit\n')
+# fbund.close()
+# #------------------------------------------------------------------
 
-#Extra PACKMOL directives
-if pmolflag:
-    fpack.write('\n')
-    fpack.write('#---End of PACKMOL file----\n')
-    fpack.close()
-flog.write('Completed psf generation for casenum: %d\n' %(casenum))
-print('Completed psf generation for casenum: ', casenum)
-#------------------------------------------------------------------
+# #Extra PACKMOL directives
+# if pmolflag:
+#     fpack.write('\n')
+#     fpack.write('#---End of PACKMOL file----\n')
+#     fpack.close()
+# flog.write('Completed psf generation for casenum: %d\n' %(casenum))
+# print('Completed psf generation for casenum: ', casenum)
+# #------------------------------------------------------------------
 
-# Close files
-flog.close()
-#------------------------------------------------------------------
+# # Close files
+# flog.close()
+# #------------------------------------------------------------------
