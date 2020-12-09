@@ -294,7 +294,7 @@ def check_pdb_defaults(inpfyle,defa_res,seginp):
     
 # Create residue sequence
 def create_seq_residues(flist,nresarr,nch,segpref,flog,graftopt,\
-                        backbone_res):
+                        nblocks,nres_types,backbone_res):
 
     # Write list to a separate file
     flist.write(';#  Entire segment list\n')
@@ -307,22 +307,57 @@ def create_seq_residues(flist,nresarr,nch,segpref,flog,graftopt,\
 
     out_list = [[] for i in range(nch)] # output list of residues
     
-    # Generate list 
+    # Subtract number of branches before adding the backbone list
+    if graft_opt[0]:
+        br_res_ch = [] # branch residues per chain
+        for chcnt in range(nch):
+            deg_poly_chain = nresarr[chcnt]; br_cnt = 0
+            for ival in range(3,len(graft_opt),3):
+                rep_freq = int(graft_opt[ival]) #repeat frequency
+                # for every branch, add one backbone mon
+                br_cnt += int(deg_poly_chain/(rep_freq+1))
+            br_res_ch.append(br_cnt)
+            
+    # Generate list for backbone    
     for chcnt in range(nch):
         segname = segpref + str(chcnt+1)
         flist.write(';# chain number:\t%d\n' %(chcnt+1))
-
-        for blockcount in range(1,nblocks):
-            flist.write(' resetpsf\n')   
-            flist.write(' segment %s {\n' %(segname))
-
-            deg_poly_chain = nresarr[chcnt]
-            for restyp_cnt in range(nres_types):
-                resnum = 0
-                for appctr in range(int(backbone_res[resnum+1])):
-                    out_list[chcnt].append(backbone_res[resnum])
-                    resnum = resnum+2
-
+        n_bb_mons = nresarr[chcnt] - br_res_ch[chcnt]
+        if n_bb_mons <= 1: #ERROR
+            print('ERROR: Unphysical number of backbone monomers')
+            print('Average degree of polymerization may be small')
+            return -1
+        flist.write('; backbone/branch: %d  %d' \
+                    %(n_bb_mons,br_res_ch[chcnt]))
+        flist.write(' resetpsf\n')   
+        flist.write(' segment %s {\n' %(segname))
+        rescntr = 0; blockcount = 0; restyp_cnt = 0
+        while rescntr < n_bb_mons:
+            while restype < nres_types:
+                appendctr = 0
+                while appendctr < int(backbone_res[3*restype+2)]):
+                    resname1 = backbone_res[3*restype]
+                    out_list[chcnt].append(resname1)
+                    flist.write(' residue\t%d\t%s\n' \
+                                %(rescntr+1,resname1))
+                    rescntr += 1; appendctr += 1
+                    if rescntr >= n_bb_mons: #exit
+                        restype = nres_types+1
+                        appctr  = backbone_res[restype+1]+1
+                restype += 1 # end appctr loop; jump to next res
+            if nblocks > 1: #end restype loop; reloop
+                restype = 0
+        # Generate list for branches (little expensive to re-do it
+        # here; but will make the output cleaner)
+        if graft_opt[0]:
+            for ival in range(3,len(graft_opt),3):
+                rep_freq = int(graft_opt[ival])
+                num_br   = int(nresarr[chcnt]/rep_freq)
+                resname1 = graft_opt[ival+1]
+                out_list[chcnt].append(resname1)
+                flist.write(' residue\t%d\t%s\n' \
+                            %(rescntr+1,resname1))
+                rescntr += 1
 
     # After going through all the chains, count each residue
     count_res = Counter(out_list)
@@ -338,30 +373,9 @@ def create_seq_residues(flist,nresarr,nch,segpref,flog,graftopt,\
         flog.write('%g\t' %(outdist[wout]/sumval))
 #---------------------------------------------------------------------
 
-# read all patch incompatibilities
-def read_patch_incomp(fname):
-    with open(fname,'r') as fin:
-        result = [[sval for sval in line.split()] for line in fin]
-    return result
-#---------------------------------------------------------------------
-
-# check forbidden consecutive patches
-# THIS IS FOR RES1-PATCH1-RES2-PATCH2 combination
-# Only patch1 and patch2 are important. rest is checked in
-# check_constraints: patname1 - leftpatch, patname2 - rightpatch
-def is_forbid_patch(patchname1,patchname2,patforbid):
-    flag = 0 # default not forbidden
-    for i in range(len(patforbid)):
-        if patforbid[i][0] == patchname1:
-            if any(patchname2 in st for st in patforbid[i]):
-                flag = 1
-        
-    return flag
-#---------------------------------------------------------------------
-
-def create_seq_patches(flist,nresarr,nch,segpref,inp_dict,cumulprobarr\
-                   ,tol,maxattmpt,flog,ctr_flag,pres_fyle,residlist,\
-                   patforbid,graft_opt):
+# create patch sequence
+def create_seq_patches(flist,nresarr,nch,segpref,flog,graft_opt,\
+                       nblocks,nres_types,backbone_seq,backbone_pats):
 
     # Write list to a separate file
     flist.write(';# Entire patch list\n')
@@ -371,46 +385,49 @@ def create_seq_patches(flist,nresarr,nch,segpref,inp_dict,cumulprobarr\
 
     sum_of_res = sum(nresarr)
     sum_of_pat = sum_of_res - nch
+       
     flist.write(';# Total number of patches\t%d\n' %(sum_of_pat))
+    flist.write(';# -- Begin patches for %s ---\n' %(segname))
     
-    out_list = [[] for i in range(nch)] # output list of residues
-    
-    # Generate list 
+    out_list = [[] for i in range(nch)] # output list of patches
+
+    # Generate list for backbone
     for chcnt in range(nch):
         segname = segpref + str(chcnt+1)
         flist.write(';# chain number:\t%d\n' %(chcnt+1))
-
-        for blockcount in range(1,nblocks):
-            flist.write(' resetpsf\n')   
-            flist.write(' segment %s {\n' %(segname))
-
-            deg_poly_chain = nresarr[chcnt]
-            for restyp_cnt in range(nres_types):
-                resnum = 0
-                for appctr in range(int(backbone_res[resnum+1])):
-                    out_list[chcnt].append(backbone_res[resnum])
-                    resnum = resnum+2
-
-
-    while chcnt < nch-1: #since chcnt is initialized to -1
-
-        chcnt += 1
-        segname = segpref + str(chcnt+1)
-        flist.write(';# chain number:\t%d\n' %(chcnt+1))
-        flist.write(';# -- Begin patches for %s ---\n' %(segname))
-        
-        patcnt = 0
-        branched = 0
-        patname_L = 'None'
         deg_poly_chain = nresarr[chcnt]
+
+        for blockcount in range(nblocks):
+            pattyp_cnt = 0; resnum = 0
+            while pattyp_cnt < 2*nres_types-1:
+                #append backbone_res[resnum+1]-1 times for restype_i
+                for appctr in range(int(backbone_res[resnum+1])-1):
+                    out_list[chcnt].append(backbone_pat[pattyp_cnt])
+                #append restype_i-restype_i+1 patch, if nrestypes>1
+                pattyp_cnt += 1
+                if nres_types > 1:
+                    out_list[chcnt].append(backbone_pat[pattyp_cnt])
+                    pattyp_cnt += 1
+            if nblocks > 1:
+                out_list[chcnt].append(backbone_pat[pattyp_cnt])
+
+    # Generate list for branches if grafted
+    for chcnt in range(nch):
         
-        # After going through all the chains, count occurence of 
-        #each res/patch
-        outdist = []
-        for key in inp_dict:
-            outdist.append(sum([i.count(key) for i in out_list]))
 
+    # After going through all the chains, count each patch
+    count_res = Counter(out_list)
 
+    #check sum and write output
+    sumval = sum(count_res.values())
+    if sumval != sum_of_pat:
+        print('Sum from distn,sum_of_res:',sumval,sum_of_pat)
+        exit('ERROR: Sum not equal to the total # of patches')
+
+    # Write to log file
+    for wout in range(len(outdist)):
+        flog.write('%g\t' %(outdist[wout]/sumval))
+        
 #---------------------------------------------------------------------
 
 # Find patch for Case 1: when RES1 and RES2 are normal residues.

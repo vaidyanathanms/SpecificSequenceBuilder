@@ -27,7 +27,7 @@ print('Input file name: ', sys.argv[1])
 #------------------------------------------------------------------
 
 # Set defaults
-graft_opt = []; backbone_res = []; backbone_pat = []
+graft_opt = []; backbone_res = []; backbone_pats = []
 input_pdb = 'none'; input_namd = 'none'; input_prm = 'none'
 itertype = 'single'
 def_res = 'none'; seg_name = 'SEG'; res_initiator = 'none'
@@ -72,13 +72,13 @@ with open(sys.argv[1]) as farg:
             seg_name = words[1]
         elif words[0] == 'backbone_res_seq':
             fresflag = 1
-            nblocks    = int(words[1]) # number of blocks
+            nblocks    = int(words[1]) # number of blocks (1,>1)
             nres_types = int(words[2]) # number of residue types
             if nblocks < 1 or nres_types < 1:
                 exit('Unphysical number of blocks/residue types')
             if len(words) < 5 or (len(words)-3)%2 != 0:
                 exit('Unknown number of graft options: ' + line)
-            else:
+            else: #resname patchname #residues
                 for wcnt in range(len(words)-3):
                     backbone_res.append(words[wcnt+3])
         elif words[0] == 'backbone_pat_seq':
@@ -89,11 +89,11 @@ with open(sys.argv[1]) as farg:
                 exit('Mismatch between # of residues and patches')            
             fpatflag = 1
             for wcnt in range(len(words)):
-                backbone_pat.append(words[wcnt+1])
+                backbone_pats.append(words[wcnt+1])
         elif words[0] == 'graft_seq':
             if len(words) < 5 or (len(words)-2)%3 != 0:
                 exit('Unknown number of graft options: ' + line)
-            else:
+            else: #graft_opt-> 1(0) graft_res graft_pat repeat_pos
                 graft_opt.append(int(words[1]))
                 for wcnt in range(len(words)-2):
                     graft_opt.append(words[wcnt+2])
@@ -161,7 +161,8 @@ elif cleanslate:
     srcdir
     shutil.rmtree(head_outdir)
     os.mkdir(head_outdir)
-print('Begin analysis for: %s, casenum %d' %(biomas_typ,casenum))
+print('Beginning chain generation...')
+print('Polymer type/Casenum: %s   %d' %(biomas_typ,casenum))
 #------------------------------------------------------------------
 
 # Check initial and pdb file defaults and copy files
@@ -219,9 +220,9 @@ if fpdbflag and fnamdflag: # if initial pdb file is present
 #------------------------------------------------------------------
 
 if graft_opt[0] == 1:
-    flog.write('Branching incorporated while building the chains\n')
+    flog.write('Building branched chains...\n')
 else:
-    flog.write('Linear chains with no branches are built\n')
+    flog.write('Building linear chains...\n')
 #------------------------------------------------------------------
 
 # Open file and write headers
@@ -240,7 +241,8 @@ patch_list = [[] for i in range(num_chains-1)]
 print('Generating residues..')
 flog.write('Creating residue list..\n')
 res_list = create_seq_residues(fresin,deg_poly_all,num_chains,\
-                               seg_name,flog,graft_opt,backbone_res)
+                               seg_name,flog,graft_opt,nblocks,\
+                               nres_types,backbone_res)
 if res_list == -1:
     exit()
 #------------------------------------------------------------------
@@ -248,10 +250,9 @@ if res_list == -1:
 # Create patches
 print('Generating patches..')
 flog.write('Creating patches list..\n')
-patch_list = create_seq_patches(fpatchin,deg_poly_all,num_chains,seg_name,\
-                            patchperc_dict,cumul_patcharr,conftol,\
-                            maxatt,flog,fl_constraint,input_pres,\
-                            res_list,ppctr_list,graft_opt)
+patch_list = create_seq_patches(fpatchin,deg_poly_all,num_chains,\
+                                seg_name,graft_opt,nblocks,nres_types\
+                                ,backbone_seq,backbone_pats)
 
 if patch_list == -1:
     exit()
