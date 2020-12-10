@@ -300,13 +300,14 @@ def create_res_pat(nresarr,nch,segpref,flog,graft_opt,bl_type,\
             br_res_ch.append(br_cnt)
 
     # If bl_type is single, make fractions of each block
+    restot_val = 0
     if bl_type == 'single': #make 1 block with fa,fb,..
-        restot_val = 0
         for ival in range(1,len(backbone_res),2):
             restot_val += float(backbone_res[ival])
 
     # Generate list for backbone    
     for chcnt in range(nch):
+        ntotmons = nresarr[chcnt]
         segname = segpref + str(chcnt+1)
         flog.write(';# chain number:\t%d\n' %(chcnt+1))
         n_bb_mons = nresarr[chcnt] - br_res_ch[chcnt]
@@ -314,93 +315,114 @@ def create_res_pat(nresarr,nch,segpref,flog,graft_opt,bl_type,\
             print('ERROR: Unphysical number of backbone monomers')
             print('Average degree of polymerization may be small')
             raise RuntimeError('ERROR: Check input')
-        flog.write(';# # of backbone/branch residues: %d\t%d' \
-                   %(n_bb_mons,br_res_ch[chcnt]))
+        flog.write(';#of total/backbone/branch residues: %d\t%d\t%d'\
+                   %(ntotmons,n_bb_mons,br_res_ch[chcnt]))
         rescntr = 0; blockcount = 0
-        restyp_cnt = 0; pattype_cnt = 0
-
         while rescntr < n_bb_mons: # do until total backbone residues
-            restype = 0
-            while restype < nres_types: # add each residue type
+            restyp_cnt = 0; pattype_cnt = 0
+            while restyp_cnt < nres_types: # add each residue type
                 appendctr = 0
-                if bl_type == 'single':
-                    f_res=float(backbone_res[2*restype+1])/restot_val
-                    nresidues = int(n_bb_mons*f_res)
-                else:
-                    nresidues = int(backbone_res[2*restype+1])
-                if nresidues > 1: # Set patch for this restype 
-                    print(chcnt,pattype_cnt,)
+                nmax_res=ret_num_resids(backbone_res[2*restyp_cnt+1]\
+                                        ,restot_val,n_bb_mons,bl_type\
+                                        ,restyp_cnt,nres_types)
+                if nmax_res > 1: # Set patch for this restype
                     patname = backbone_pat[pattype_cnt]
-                    print(patname)
                     pattype_cnt += 1
-                while appendctr < nresidues: # Build this restype
-                    resname = backbone_res[2*restype]
+                while appendctr <= nmax_res-1: # Build this restype
+                    resname = backbone_res[2*restyp_cnt]
                     res_list[chcnt].append(resname)
                     flog.write(' residue\t%d\t%s\n' \
                                %(rescntr+1,resname))
-                    if appendctr < nresidues-1: # Add patch
+                    rescntr += 1
+                    if appendctr > 0 and appendctr <= nmax_res-1 and \
+                       rescntr <= n_bb_mons: 
+                        # Add patch if 1) its not first residue and
+                        # 2) its not last residue of a given type and
+                        # 3) its not last residue of the chain
+                        # NOTE: appendctr starts from 1 and hence the
+                        # max condition<=nmax_res-1. Similarly for
+                        # rescntr
                         pat_list[chcnt].append(patname)
                         flog.write('patch  %s  %s:%d  %s:%d\n' \
                                    %(patname,segname,rescntr,\
                                      segname,rescntr+1))
-                    rescntr += 1; appendctr += 1                       
+                    appendctr += 1                       
                     if rescntr >= n_bb_mons: # exit everything
-                        restype    = nres_types+1
-                        appendctr  = nresidues+1 
-                if restype < nres_types-1: #patch b/w diff restypes
-                    patname = backbone_pat[pattype_cnt+1]
+                        restyp_cnt = nres_types+1
+                        appendctr  = nmax_res+1 
+                if restyp_cnt < nres_types-1: #patch b/w diff restypes
+                    patname = backbone_pat[pattype_cnt]
                     pat_list[chcnt].append(patname)
                     flog.write('patch  %s  %s:%d  %s:%d\n' \
-                               %(patchname,segname,rescntr+1,\
+                               %(patname,segname,rescntr+1,\
                                  segname,rescntr+2))
                     pattype_cnt += 1
-                restype += 1 # jump to next res
-            if nblocks > 1: #end restype loop; reloop
+                restyp_cnt += 1 # jump to next res
+            if bl_type == 'multi': #end restype loop; reloop
                 #patch between different blocks if the blocks do not
                 #terminate 
-                if restype == nres_types-1:
+                if restyp_cnt == nres_types-1:
                     patname = backbone_pat[pattype_cnt+1]
                     pat_list[chcnt].append(patname)
                     flog.write('patch  %s  %s:%d  %s:%d\n' \
-                               %(patchname,segname,rescntr+1,\
+                               %(patname,segname,rescntr+1,\
                                  segname,rescntr+2))
                     pattype_cnt += 1
-                restype = 0
+                restyp_cnt = 0
         # Add branches here
         if graft_opt[0]:
-            for ival in range(3,len(graft_opt),3):
-                rep_freq = int(graft_opt[ival])
-                num_br   = int(nresarr[chcnt]/rep_freq)
-                resname  = graft_opt[ival+1]
-                patname  = graft_opt[ival+2]
-                for jval in range(1,num_br):
-                    bbpos = jval*rep_freq
+            for ival in range(1,len(graft_opt),3):
+                rep_freq = int(graft_opt[ival+2])
+                num_br   = int(ntotmons/(rep_freq+1))
+                resname  = graft_opt[ival]
+                patname  = graft_opt[ival+1]
+                for jval in range(0,num_br):
+                    bbpos = (jval+1)*rep_freq
                     res_list[chcnt].append(resname)
                     pat_list[chcnt].append(patname)
                     flog.write(' residue\t%d\t%s\n'
-                               (rescntr+1,resname1))
+                               %(rescntr+1,resname))
                     flog.write('patch  %s  %s:%d  %s:%d\n' \
                                %(patname,segname,bbpos,\
                                  segname,rescntr+1))
                     rescntr += 1
 
-
-    # After going through all the chains, count each residue
-    count_res = Counter(out_list)
-
     #check sum and write output
-    sumval = sum(count_res.values())
+    sumval = sum(len(row) for row in res_list)
     if sumval != sum_of_res:
         print('Sum from distn,sum_of_res:',sumval,sum_of_res)
-        exit('ERROR: Sum not equal to the total # of residues')
+        raise RuntimeError('Sum not equal to the total # of residues')
 
-    # Write to log file
-    for wout in range(len(outdist)):
-        flog.write('%g\t' %(outdist[wout]/sumval))
+    sumval = sum(len(row) for row in pat_list)
+    if sumval != sum_of_pat:
+        print('Sum from distn,sum_of_pat:',sumval,sum_of_pat)
+        raise RuntimeError('Sum not equal to the total # of patches')
 
+    print('Succesfully generated residues & patches for all chains..')
     return res_list, pat_list
 #---------------------------------------------------------------------
 
+# Return number of residues/throw exceptions based on bl_type
+def ret_num_resids(numres_str,restot_val,n_bb_mons,bl_type,restyp_cnt\
+                   ,nres_types):
+    if bl_type == 'single':
+        f_res=float(numres_str)/restot_val
+        nmax_res = int(n_bb_mons*f_res)
+    else:
+        nmax_res = int(numres_str)
+    if bl_type == 'block' and nmax_res < 1:
+        raise RuntimeError('#of residues less than 1 for '+\
+                           str(2*restyp_cnt+1))
+    if bl_type == 'single' and restype_cnt == nres_types-1:
+        #Adjust number of monomers for round-off errors
+        if nmax_res < 1:
+            print('WARNING: Round-off errors')
+            print('Rounding off type: ', 2*restyp_cnt+1, '( ',\
+                  nmax_res,') to 1.')
+            nmax_res = 1
+    return nmax_res
+
+#---------------------------------------------------------------------
 # Write residues/patches iteration by iteration
 def write_multi_segments(fin,iter_num,nresthisiter,nch,chnum,\
                          segpref,res_list,patch_list,graft_opt,\
