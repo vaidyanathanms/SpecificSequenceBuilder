@@ -55,23 +55,6 @@ def check_all_flags(casenum,disflag,M,N,fnamd,fpdbflag,ftopflag,\
     return outflag
 #---------------------------------------------------------------------
 
-# Define block type
-def check_block_type(nblocks):
-
-    if not RepresentsInt(nblocks):
-        raise RuntimeError('ERROR: nblocks should be +ve integer')
-
-    if nblocks < 1:
-        raise RuntimeError("ERROR: nblocks should be +ve integer")       
-    elif nblocks == 1:
-        bl_type = 'single'
-        print('Single block..')
-    else:
-        bl_type = 'multi'
-        print('Multiple blocks..')
-    return bl_type
-#---------------------------------------------------------------------
-
 # Check integer
 def RepresentsInt(s):
     try: 
@@ -88,6 +71,7 @@ def psfgen_headers(fin,topname,outname):
     topinp = '../' + topname
     fin.write('%s\t %s\n' %('topology',topinp))
 #---------------------------------------------------------------------              
+
 # Details for closing input files
 def psfgen_postprocess(fin,writetype,iter_num,segname,fnamdflag,\
                        basic_pdb):
@@ -206,8 +190,8 @@ def make_polydisp_resids(inpfyle, nch):
 #---------------------------------------------------------------------
 
 # Initiate log file
-def init_logwrite(flog,casenum,bmtype,Marr,tfile,segname,\
-              nch,opstyle,disflag,pdiinp):
+def init_logwrite(flog,casenum,bmtype,Marr,segname,nch,opstyle,\
+                  disflag,pdiinp,tfile = 'none'):
 
     flog.write('Case number: %d\n' %(casenum))
     flog.write('Creating TCL file for %s\n' %(bmtype))
@@ -221,8 +205,12 @@ def init_logwrite(flog,casenum,bmtype,Marr,tfile,segname,\
             flog.write('Chain#/Num Residues: %d\t%d\n' %(i+1,Marr[i]))
 
     flog.write('PDI: %g\n' %(pdiinp))
-    flog.write('Tot res/pat: %d\t%d\n' %(sum(Marr),sum(Marr)-len(Marr)))
-    flog.write('Input Topology file file: %s\n' %(tfile))
+    flog.write('Tot res/pat: %d\t%d\n' %(sum(Marr),\
+                                         sum(Marr)-len(Marr)))
+    if tfile != 'none':
+        flog.write('Input topology file: %s\n' %(tfile))
+    else:
+        flog.write('No topology file specified\n')        
     flog.write('Segment name in input (or output prefix): %s\n' \
                %(segname))
     flog.write('Output style: %s\n' %(opstyle))
@@ -234,19 +222,16 @@ def init_logwrite(flog,casenum,bmtype,Marr,tfile,segname,\
 def find_init_files(fpdbflag,fnamdflag,makepdifile,input_top='none',\
                     input_pdb='none'):
     # Read defaults and throw exceptions
-    if not os.path.exists(input_top):
-        print('Topology file not found \n', input_top)
-        return -1
+    if not os.path.exists(input_top) and input_top != 'none':
+        raise RuntimeError('Topology file not found: '+input_top)
     elif fnamdflag:
         if fpdbflag and not os.path.exists(input_pdb):
-            print('Initial structure file not found \n', input_pdb)
-            return -1
+            raise RuntimeError('Initial structure file not found'+\
+                               input_pdb)
     elif makepdifile == 1:
         if not os.path.exists('pdigen.f90') or \
            not os.path.exists('pdi_dist_params.f90'):
-            print('Source file to generate PDIs not found')
-            return -1
-    return 1
+            raise RuntimeError('Source file to generate PDIs not found')
 #---------------------------------------------------------------------
 
 # Check whether the input pdb file is consistent with the inputs given
@@ -286,7 +271,7 @@ def check_pdb_defaults(inpfyle,defa_res,seginp):
 #---------------------------------------------------------------------
     
 # Create residue sequence
-def create_res_pat(nresarr,nch,segpref,flog,graftopt,nblocks,\
+def create_res_pat(nresarr,nch,segpref,flog,graft_opt,bl_type,\
                    nres_types,backbone_res,backbone_pat):
 
     # Write list to a log file
@@ -313,7 +298,13 @@ def create_res_pat(nresarr,nch,segpref,flog,graftopt,nblocks,\
                 # for every branch, add one backbone mon
                 br_cnt += int(deg_poly_chain/(rep_freq+1))
             br_res_ch.append(br_cnt)
-    
+
+    # If bl_type is single, make fractions of each block
+    if bl_type == 'single': #make 1 block with fa,fb,..
+        restot_val = 0
+        for ival in range(1,len(backbone_res),2):
+            restot_val += float(backbone_res[ival])
+
     # Generate list for backbone    
     for chcnt in range(nch):
         segname = segpref + str(chcnt+1)
@@ -329,35 +320,41 @@ def create_res_pat(nresarr,nch,segpref,flog,graftopt,nblocks,\
         restyp_cnt = 0; pattype_cnt = 0
 
         while rescntr < n_bb_mons: # do until total backbone residues
+            restype = 0
             while restype < nres_types: # add each residue type
                 appendctr = 0
-                nresidues = int(backbone_res[2*restype+1])
-                while appendctr < nresidues:
+                if bl_type == 'single':
+                    f_res=float(backbone_res[2*restype+1])/restot_val
+                    nresidues = int(n_bb_mons*f_res)
+                else:
+                    nresidues = int(backbone_res[2*restype+1])
+                if nresidues > 1: # Set patch for this restype 
+                    print(chcnt,pattype_cnt,)
+                    patname = backbone_pat[pattype_cnt]
+                    print(patname)
+                    pattype_cnt += 1
+                while appendctr < nresidues: # Build this restype
                     resname = backbone_res[2*restype]
-                    res_list[chcnt].append(resname1)
-                    flog.write(' residue\t%d\t%s\n'
-                               (rescntr+1,resname1))
-                    rescntr += 1; appendctr += 1                       
-                    if rescntr >= n_bb_mons: #exit
-                        restype    = nres_types+1
-                        appendctr  = nresidues+1 
-                    # Now add patch
-                    if rescntr > 1 and appendctr < nresidues-1:
-                        patname = backbone_pat[pattype_cnt]
-                        patype_cnt += 1
+                    res_list[chcnt].append(resname)
+                    flog.write(' residue\t%d\t%s\n' \
+                               %(rescntr+1,resname))
+                    if appendctr < nresidues-1: # Add patch
                         pat_list[chcnt].append(patname)
                         flog.write('patch  %s  %s:%d  %s:%d\n' \
                                    %(patname,segname,rescntr,\
                                      segname,rescntr+1))
-                #patch between different residue types
-                if restype < nres_types-1:
+                    rescntr += 1; appendctr += 1                       
+                    if rescntr >= n_bb_mons: # exit everything
+                        restype    = nres_types+1
+                        appendctr  = nresidues+1 
+                if restype < nres_types-1: #patch b/w diff restypes
                     patname = backbone_pat[pattype_cnt+1]
                     pat_list[chcnt].append(patname)
                     flog.write('patch  %s  %s:%d  %s:%d\n' \
                                %(patchname,segname,rescntr+1,\
                                  segname,rescntr+2))
                     pattype_cnt += 1
-                restype += 1 # end appctr loop; jump to next res
+                restype += 1 # jump to next res
             if nblocks > 1: #end restype loop; reloop
                 #patch between different blocks if the blocks do not
                 #terminate 

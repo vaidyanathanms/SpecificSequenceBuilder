@@ -27,9 +27,9 @@ print('Input file name: ', sys.argv[1])
 #------------------------------------------------------------------
 
 # Set defaults
-graft_opt = []; backbone_res = []; backbone_pats = []
+graft_opt = [0]; backbone_res = []; backbone_pat = []
 input_pdb = 'none'; input_namd = 'none'; input_prm = 'none'
-itertype = 'single'
+input_top = 'none'; itertype = 'single'
 def_res = 'none'; seg_name = 'SEG'; res_initiator = 'none'
 casenum,mono_deg_poly,num_chains,fpdbflag,ftopflag,disperflag,\
 fresflag,fpatflag,makepdifile,fnamdflag,pmolflag,cleanslate,\
@@ -72,32 +72,40 @@ with open(sys.argv[1]) as farg:
             seg_name = words[1]
         elif words[0] == 'backbone_res_seq':
             fresflag = 1; npat = 0
-            nblocks    = int(words[1]) # number of blocks (1,>1)
-            bl_type    = check_block_type(nblocks)
+            bl_type    = words[1]
+            if bl_type != 'single' and bl_type != 'multi':
+                exit('Unknown block option: '+bl_type)
             nres_types = int(words[2]) # number of residue types
-            if nblocks < 1 or nres_types < 1:
-                exit('Unphysical number of blocks/residue types')
+            if nres_types < 1:
+                exit('Unphysical number of residue types')
             if len(words) < 5 or (len(words)-3)%2 != 0:
                 exit('Unknown number of graft options: ' + line)
             else: #resname residues
+                npat = 0
                 for wcnt in range(len(words)-3):
                     backbone_res.append(words[wcnt+3])
                     if (wcnt+1)%2 == 0 and int(words[wcnt+3]) > 1:
                         npat += 1 #update if nresidues>1
+                npat += nres_types-1 #add nres_types-1
         elif words[0] == 'backbone_pat_seq':
             if fresflag != 1:
                 exit('Enter residue sequence before patches')
-            if (bl_type == 'single' and len(words)-1 != npat) or \
-               (bl_type == 'multi'  and len(words)-1 != npat+1):
+            if bl_type == 'single' and len(words)-1 != npat:
+                print('Expected # of patches/input patches:', npat,\
+                      len(words)-1)
                 exit('Mismatch between # of residues and patches')            
+            elif bl_type == 'multi'  and len(words)-1 != npat+1:
+                print('Expected # of patches/input patches:', npat+1,\
+                      len(words)-1)
+                exit('ERR:Mismatch between # of residues and patches')
             fpatflag = 1
-            for wcnt in range(len(words)):
-                backbone_pats.append(words[wcnt+1])
+            for wcnt in range(len(words)-1):
+                backbone_pat.append(words[wcnt+1])
         elif words[0] == 'graft_seq':
             if len(words) < 5 or (len(words)-2)%3 != 0:
                 exit('Unknown number of graft options: ' + line)
             else: #graft_opt-> 1(0) graft_res graft_pat repeat_pos
-                graft_opt.append(int(words[1]))
+                graft_opt[0] = int(words[1])
                 for wcnt in range(len(words)-2):
                     graft_opt.append(words[wcnt+2])
         elif words[0] == 'op_style':
@@ -167,12 +175,10 @@ print('Polymer type/Casenum: %s   %d' %(biomas_typ,casenum))
 #------------------------------------------------------------------
 
 # Check initial and pdb file defaults and copy files
-allinitflags = find_init_files(fpdbflag,fnamdflag,makepdifile,\
-                               input_top,input_pdb)
-if allinitflags == -1:
-    exit()
+find_init_files(fpdbflag,fnamdflag,makepdifile,input_top,input_pdb)
 gencpy(srcdir,head_outdir,sys.argv[1])
-gencpy(srcdir,head_outdir,input_top)
+if ftopflag == 1:
+    gencpy(srcdir,head_outdir,input_top)
 #------------------------------------------------------------------
 
 # Make monomer array for all chains
@@ -202,8 +208,8 @@ print('Tot ch/res/pat/pdi',num_chains,sum(deg_poly_all),\
 
 # Open log file
 flog = open(head_outdir + '/' + log_fname,'w')
-init_logwrite(flog,casenum,biomas_typ,deg_poly_all,input_top,\
-              seg_name,num_chainsitertype,disperflag,pdival)
+init_logwrite(flog,casenum,biomas_typ,deg_poly_all,seg_name,\
+              num_chains,itertype,disperflag,pdival,input_top)
 #------------------------------------------------------------------
 
 # Check NAMD inputs and pdb file checks
@@ -235,7 +241,7 @@ patch_list = [[] for i in range(num_chains-1)]
 print('Generating residues and patches..')
 flog.write('Creating residue and patch list..\n')
 res_list,patch_list = create_res_pat(deg_poly_all,num_chains,seg_name,\
-                                     flog,graft_opt,nblocks,nres_types,\
+                                     flog,graft_opt,bl_type,nres_types,\
                                      backbone_res,backbone_pat)
 if res_list == -1 or patch_list == -1:
     exit()
