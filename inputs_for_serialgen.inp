@@ -2,16 +2,13 @@ case_num	1
 biomass_type	switchgrass
 disperse	READ polydisp.inp
 num_resids	30
-num_chains	2
+num_chains	10
 seg_name	L
-backbone_res_seq	multi	2	XYL	10	MAN	2
-backbone_pat_seq	AA	AB	BB	BA
-graft_seq	1	Ara	GOG	3
+backbone_res_seq	multi	2	XYL	10	MAN	3
+backbone_pat_seq	AA AB BB BA
+graft_seq	1	Ara	GOG	3	MeA	13BB	8
 op_style	single
 clean_directories	Y
-# optional: namd_inp	mini_pyconf.conf lignin.prm
-# optional: pdb_ipfile	single_G.pdb GUAI
-# optional: gen_packmol	DEF	DEF	0.0	0.0	0.0	0.0	0.0	0.0
 # *** not needed for sequence builder **
 # tol	0.1
 # nattempts	20
@@ -19,3 +16,6 @@ clean_directories	Y
 # patch_inp	inpprob_pat.dat
 # terminator	TRCN
 # top_ipfile	top_lignin.top
+# namd_inp	mini_pyconf.conf lignin.prm
+# pdb_ipfile	single_G.pdb GUAI
+# gen_packmol	DEF	DEF	0.0	0.0	0.0	0.0	0.0	0.0
