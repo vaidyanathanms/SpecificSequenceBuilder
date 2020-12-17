@@ -315,7 +315,7 @@ def create_res_pat(nresarr,nch,segpref,flog,graft_opt,bl_type,\
             print('ERROR: Unphysical number of backbone monomers')
             print('Average degree of polymerization may be small')
             raise RuntimeError('ERROR: Check input')
-        flog.write(';#of total/backbone/branch residues: %d\t%d\t%d'\
+        flog.write(';#of total/backbone/branch residues: %d\t%d\t%d\n'\
                    %(ntotmons,n_bb_mons,br_res_ch[chcnt]))
         rescntr = 0; blockcount = 0
         while rescntr < n_bb_mons: # do until total backbone residues
@@ -331,7 +331,7 @@ def create_res_pat(nresarr,nch,segpref,flog,graft_opt,bl_type,\
                 while appendctr <= nmax_res-1: # Build this restype
                     resname = backbone_res[2*restyp_cnt]
                     res_list[chcnt].append(resname)
-                    flog.write(' residue\t%d\t%s\n' \
+                    flog.write('residue\t%d\t%s\n' \
                                %(rescntr+1,resname))
                     rescntr += 1
                     if appendctr > 0 and appendctr <= nmax_res-1 and \
@@ -343,30 +343,36 @@ def create_res_pat(nresarr,nch,segpref,flog,graft_opt,bl_type,\
                         # max condition<=nmax_res-1. Similarly for
                         # rescntr
                         pat_list[chcnt].append(patname)
-                        flog.write('patch  %s  %s:%d  %s:%d\n' \
-                                   %(patname,segname,rescntr,\
-                                     segname,rescntr+1))
+                        flog.write('patch\t%s\t%s:%d\t%s:%d\n' \
+                                   %(patname,segname,rescntr-1,\
+                                     segname,rescntr))
+                        pat_list[chcnt].append(rescntr-1)
+                        pat_list[chcnt].append(rescntr)
                     appendctr += 1                       
                     if rescntr >= n_bb_mons: # exit everything
-                        restyp_cnt = nres_types+1
-                        appendctr  = nmax_res+1 
+                        restyp_cnt = nres_types+2
+                        appendctr  = nmax_res+2
                 if restyp_cnt < nres_types-1: #patch b/w diff restypes
                     patname = backbone_pat[pattype_cnt]
                     pat_list[chcnt].append(patname)
-                    flog.write('patch  %s  %s:%d  %s:%d\n' \
-                               %(patname,segname,rescntr+1,\
-                                 segname,rescntr+2))
+                    flog.write('patch\t%s\t%s:%d\t%s:%d\n' \
+                               %(patname,segname,rescntr,\
+                                 segname,rescntr+1))
+                    pat_list[chcnt].append(rescntr)
+                    pat_list[chcnt].append(rescntr+1)
                     pattype_cnt += 1
                 restyp_cnt += 1 # jump to next res
             if bl_type == 'multi': #end restype loop; reloop
                 #patch between different blocks if the blocks do not
                 #terminate 
-                if restyp_cnt == nres_types-1:
-                    patname = backbone_pat[pattype_cnt+1]
+                if restyp_cnt == nres_types:
+                    patname = backbone_pat[pattype_cnt]
                     pat_list[chcnt].append(patname)
-                    flog.write('patch  %s  %s:%d  %s:%d\n' \
-                               %(patname,segname,rescntr+1,\
-                                 segname,rescntr+2))
+                    flog.write('patch\t%s\t%s:%d\t%s:%d\n' \
+                               %(patname,segname,rescntr,\
+                                 segname,rescntr+1))
+                    pat_list[chcnt].append(rescntr)
+                    pat_list[chcnt].append(rescntr+1)
                     pattype_cnt += 1
                 restyp_cnt = 0
         # Add branches here
@@ -380,11 +386,13 @@ def create_res_pat(nresarr,nch,segpref,flog,graft_opt,bl_type,\
                     bbpos = (jval+1)*rep_freq
                     res_list[chcnt].append(resname)
                     pat_list[chcnt].append(patname)
-                    flog.write(' residue\t%d\t%s\n'
+                    flog.write('residue\t%d\t%s\n'
                                %(rescntr+1,resname))
-                    flog.write('patch  %s  %s:%d  %s:%d\n' \
+                    flog.write('patch\t%s\t%s:%d\t%s:%d\n' \
                                %(patname,segname,bbpos,\
                                  segname,rescntr+1))
+                    pat_list[chcnt].append(bbpos)
+                    pat_list[chcnt].append(rescntr+1)
                     rescntr += 1
 
     #check sum and write output
@@ -394,8 +402,8 @@ def create_res_pat(nresarr,nch,segpref,flog,graft_opt,bl_type,\
         raise RuntimeError('Sum not equal to the total # of residues')
 
     sumval = sum(len(row) for row in pat_list)
-    if sumval != sum_of_pat:
-        print('Sum from distn,sum_of_pat:',sumval,sum_of_pat)
+    if sumval/3 != sum_of_pat:
+        print('Sum from distn,sum_of_pat:',sumval/3,sum_of_pat)
         raise RuntimeError('Sum not equal to the total # of patches')
 
     print('Succesfully generated residues & patches for all chains..')
@@ -413,7 +421,7 @@ def ret_num_resids(numres_str,restot_val,n_bb_mons,bl_type,restyp_cnt\
     if bl_type == 'block' and nmax_res < 1:
         raise RuntimeError('#of residues less than 1 for '+\
                            str(2*restyp_cnt+1))
-    if bl_type == 'single' and restype_cnt == nres_types-1:
+    if bl_type == 'single' and restyp_cnt == nres_types-1:
         #Adjust number of monomers for round-off errors
         if nmax_res < 1:
             print('WARNING: Round-off errors')
@@ -463,60 +471,12 @@ def write_multi_segments(fin,iter_num,nresthisiter,nch,chnum,\
     fin.write('\n')
 
     #Patches -- ch indices should have -1 for first dimension
-    for patcnt in range(nresthisiter-1):
-        resname1 = res_list[chnum-1][patcnt]
-        resname2 = res_list[chnum-1][patcnt+1]
-        patchname = patch_list[chnum-1][patcnt]
-
-        # Normal Case: (see create_patches)
-        if (resname1 not in graft_opt) and (resname2 not in graft_opt):
-            # Add extra letter to patches for consistency with top file
-            # Only for B5 residues. May want to write it as an extra
-            # wrapper later for generic cases
-            if patchname == 'B5' and resname2 == 'GUAI':
-                patchname = 'B5G'
-            elif patchname == 'B5' and resname2 == 'PHP':
-                patchname = 'B5P'
-            elif patchname == 'B5' and resname2 == 'CAT':
-                patchname = 'B5C'
-            fin.write('patch  %s  %s:%d  %s:%d\n' \
-                      %(patchname,segname,patcnt+1,segname,patcnt+2))
-
-        # Special Case 1: (see create_patches)
-        elif resname1 in graft_opt:
-            fin.write('patch  %s  %s:%d  %s:%d\n' \
-                      %(patchname,segname,patcnt+1,segname,patcnt+2))
-            
-        # Special Case 2: (see create_patches)
-        elif resname2 in graft_opt:
-
-            # Case 2a: last RES is graft. Patch graft between
-            # n and n+1
-            if patcnt == nresthisiter-2: 
-                fin.write('patch  %s  %s:%d  %s:%d\n' \
-                          %(patchname,segname,patcnt+1,segname,patcnt+2))
-
-            #Case 2b: patch normal between n and n+2
-            else: 
-                # Add extra letter to patches for consistency with top file
-                # Only for B5 residues. May want to write it as an extra
-                # wrapper later for generic cases
-                resname3 = res_list[chnum-1][patcnt+2]
-                if patchname == 'B5' and resname3 == 'GUAI':
-                    patchname = 'B5G'
-                elif patchname == 'B5' and resname3 == 'PHP':
-                    patchname = 'B5P'
-                elif patchname == 'B5' and resname3 == 'CAT':
-                    patchname = 'B5C'
-
-                fin.write('patch  %s  %s:%d  %s:%d\n' \
-                          %(patchname,segname,patcnt+1,segname,patcnt+3))
-                    
-        else: # Error
-            print('Unknow res/patch sequence')
-            print('ch#/patch#' , chnum, patcnt)
-            print(res_list)
-            print(patch_list)
+    for patcnt in range(1,3*(nresthisiter-1),3):
+        patchname = patch_list[chnum-1][patcnt-1]
+        patchID1  = int(patch_list[chnum-1][patcnt])
+        patchID2  = int(patch_list[chnum-1][patcnt+1])
+        fin.write('patch  %s  %s:%d  %s:%d\n' \
+                  %(patchname,segname,patchID1,segname,patchID2))
 
     fin.write('\n')
 #---------------------------------------------------------------------
@@ -563,8 +523,7 @@ def make_packmol(fpin,structname,nrepeats,trans_list):
 #---------------------------------------------------------------------
 
 # Make auxiliary files for NAMD/LigninBuilder/GROMACS
-def make_auxiliary_files(tcldir,pref_pdbpsf,nch,topname,input_lbd):
-
+def make_auxiliary_files(tcldir,pref_pdbpsf,nch,topname):
 
     # bundle.tcl for generating all psf in one go
     fbund = open(tcldir + '/step1.tcl','w')
