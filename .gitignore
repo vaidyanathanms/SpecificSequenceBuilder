@@ -2,3 +2,6 @@
 __pycache*
 *.mod
 *.o
+casenum*
+casenum_*
+casenum_*/*
